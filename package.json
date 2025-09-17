@@ -1,0 +1,23 @@
+{
+  "name": "orcabot",
+  "version": "1.0.0",
+  "description": "OrcaBot - a Discord bot for the Orca guild with moderation and utility features.",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.22.1",
+    "dotenv": "^17.2.2",
+    "node-fetch": "^2.7.0"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "orca",
+    "moderation",
+    "utility"
+  ],
+  "author": "",
+  "license": "MIT"
+}

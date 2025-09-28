@@ -7,8 +7,9 @@ OrcaBot is a Discord bot for the Orca guild, providing moderation and utility fe
 - Unban all users banned from the server with a single command
 - Mass kick users by role
 - Purge messages
-- Rename the guild
+- Rename roles
 - Give roles by role
+- Show member stats for each role
 
 ## Prerequisites
 
@@ -38,10 +39,13 @@ OrcaBot is a Discord bot for the Orca guild, providing moderation and utility fe
 ## Configuration
 
 1. Create a `.env` file in the root directory.
-2. Add your Discord bot token to the `.env` file:
+2. Add your Discord bot token and IDs to the `.env` file:
 
    ```env
-   DISCORD_TOKEN=your-bot-token-here
+   BOT_TOKEN=your-bot-token-here
+   CLIENT_ID=your-bot-client-id-here
+   GUILD_ID=your-server-id-here
+   BOT_OWNER_ID=your-discord-user-id-here
    ```
 
 **Do not commit your `.env` file to version control.**
@@ -54,13 +58,15 @@ Start the bot:
 npm start
 ```
 
-## Available Commands
+## Available Slash Commands
 
-- `!unbanAll` — Unban all users from the server
-- `!kickByRole` — Kick all users with a specific role
-- `!giveRoleByRole` — Give a role to all users with another role
-- `!purge` — Bulk delete messages
-- `!renameGuild` — Rename the server
+- `/unbanall` — Unban all users from the server
+- `/kickbyrole` — Kick all users with a specific role
+- `/giverolebyrole` — Give a role to all users with another role
+- `/purge` — Bulk delete messages
+- `/renameguild` — Rename a role
+- `/stfu` — Shut down the bot (owner only)
+- `/stats` — Show how many members have each role
 
 ## Contributing
 

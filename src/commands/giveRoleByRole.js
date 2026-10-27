@@ -1,67 +1,81 @@
-const { SlashCommandBuilder, PermissionsBitField } = require("discord.js");
+const {
+  SlashCommandBuilder,
+  PermissionsBitField,
+  MessageFlags,
+} = require("discord.js");
+
+const MAX_FROM_ROLES = 10;
+
+const builder = new SlashCommandBuilder()
+  .setName("giverolebyrole")
+  .setDescription("Give everyone with any of the chosen roles another role")
+  .addRoleOption((option) =>
+    option.setName("torole").setDescription("Role to give").setRequired(true)
+  );
+
+// Slash commands can't take a list option, so expose numbered role options.
+for (let i = 1; i <= MAX_FROM_ROLES; i++) {
+  builder.addRoleOption((option) =>
+    option
+      .setName(`fromrole${i}`)
+      .setDescription(
+        `Role ${i}: members with this role get the new role${i === 1 ? "" : " (optional)"}`
+      )
+      .setRequired(i === 1)
+  );
+}
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("giverolebyrole")
-    .setDescription("Give everyone with a specific role another role")
-    .addStringOption((option) =>
-      option
-        .setName("fromrole")
-        .setDescription("Role to give from")
-        .setRequired(true)
-    )
-    .addStringOption((option) =>
-      option.setName("torole").setDescription("Role to give").setRequired(true)
-    ),
+  data: builder,
   async execute(interaction) {
     if (
       !interaction.member.permissions.has(PermissionsBitField.Flags.ManageRoles)
     ) {
       return interaction.reply({
         content: "You do not have permission to manage roles.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
-    const fromRoleName = interaction.options.getString("fromrole");
-    const toRoleName = interaction.options.getString("torole");
+
+    const toRole = interaction.options.getRole("torole");
+    const fromRoles = [];
+    for (let i = 1; i <= MAX_FROM_ROLES; i++) {
+      const r = interaction.options.getRole(`fromrole${i}`);
+      if (r && !fromRoles.some((f) => f.id === r.id)) fromRoles.push(r);
+    }
+    const fromNames = fromRoles.map((r) => r.name).join(", ");
+
+    await interaction.deferReply();
     try {
-      await interaction.guild.members.fetch();
-      const fromRole = interaction.guild.roles.cache.find(
-        (r) => r.name === fromRoleName
-      );
-      if (!fromRole) {
-        return interaction.reply(`Role "${fromRoleName}" not found.`);
-      }
-      const toRole = interaction.guild.roles.cache.find(
-        (r) => r.name === toRoleName
-      );
-      if (!toRole) {
-        return interaction.reply(`Role "${toRoleName}" not found.`);
-      }
+      const members = await interaction.guild.members.fetch({ time: 120000 });
       let given = 0;
-      for (const [memberId, member] of fromRole.members) {
-        if (!member.roles.cache.has(toRole.id)) {
-          try {
-            await member.roles.add(toRole);
-            console.log(`Gave role "${toRoleName}" to ${member.user.tag}`);
-            given++;
-          } catch (err) {
-            console.log(
-              `Failed to give role to ${member.user.tag}: ${err.message}`
-            );
-          }
-        } else {
+      let failed = 0;
+      for (const member of members.values()) {
+        if (
+          !fromRoles.some((r) => member.roles.cache.has(r.id)) ||
+          member.roles.cache.has(toRole.id)
+        ) {
+          continue;
+        }
+        try {
+          await member.roles.add(toRole);
+          console.log(`Gave role "${toRole.name}" to ${member.user.tag}`);
+          given++;
+        } catch (err) {
+          failed++;
           console.log(
-            `${member.user.tag} already has the role "${toRoleName}"`
+            `Failed to give role to ${member.user.tag}: ${err.message}`
           );
         }
       }
-      return interaction.reply(
-        `Gave role "${toRoleName}" to ${given} member(s) with the role "${fromRoleName}".`
+      return interaction.editReply(
+        `Gave role "${toRole.name}" to ${given} member(s) with any of: ${fromNames}${
+          failed ? `, ${failed} failed` : ""
+        }.`
       );
     } catch (error) {
       console.error("Error giving roles:", error);
-      return interaction.reply("An error occurred while giving roles.");
+      return interaction.editReply("An error occurred while giving roles.");
     }
   },
 };

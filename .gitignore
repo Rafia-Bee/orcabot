@@ -1,3 +1,5 @@
 .env
 node_modules/
 .prettierrc
+members-with-role
+docs/

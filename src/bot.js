@@ -1,4 +1,9 @@
-const { Client, GatewayIntentBits, Collection } = require("discord.js");
+const {
+  Client,
+  GatewayIntentBits,
+  Collection,
+  MessageFlags,
+} = require("discord.js");
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
@@ -12,6 +17,7 @@ const client = new Client({
 });
 
 client.commands = new Collection();
+client.componentHandlers = new Collection();
 const commandsPath = path.join(__dirname, "commands");
 const commandFiles = fs
   .readdirSync(commandsPath)
@@ -21,6 +27,12 @@ for (const file of commandFiles) {
   const command = require(filePath);
   if ("data" in command && "execute" in command) {
     client.commands.set(command.data.name, command);
+    if (command.customIdPrefix && command.handleComponent) {
+      client.componentHandlers.set(
+        command.customIdPrefix,
+        command.handleComponent
+      );
+    }
   } else {
     console.warn(
       `[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`
@@ -51,6 +63,29 @@ client.on("interactionCreate", async (interaction) => {
       await command.autocomplete(interaction);
     } catch (error) {
       console.error("Autocomplete error:", error);
+    }
+    return;
+  }
+
+  // Handle button and modal interactions
+  if (interaction.isButton() || interaction.isModalSubmit()) {
+    const handler = client.componentHandlers.get(
+      interaction.customId.split(":")[0]
+    );
+    if (!handler) return;
+    try {
+      await handler(interaction);
+    } catch (error) {
+      console.error("Component error:", error);
+      const reply = {
+        content: "Something went wrong. Please try again in a moment.",
+        flags: MessageFlags.Ephemeral,
+      };
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp(reply).catch(() => {});
+      } else {
+        await interaction.reply(reply).catch(() => {});
+      }
     }
     return;
   }

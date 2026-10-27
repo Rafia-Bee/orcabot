@@ -4,10 +4,12 @@
   "description": "OrcaBot - a Discord bot for the Orca guild with moderation and utility features.",
   "main": "src/bot.js",
   "scripts": {
-    "start": "node src/bot.js"
+    "start": "node src/bot.js",
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
-    "discord.js": "^14.22.1",
+    "better-sqlite3": "^13.0.3",
+    "discord.js": "^14.27.0",
     "dotenv": "^17.2.2",
     "node-fetch": "^2.7.0"
   },

@@ -340,6 +340,11 @@ function onReady(client) {
       ? `Legion roles: ${cfg.legionRoles.map((l) => l.name).join(", ")}${cfg.guestRoleId ? ", Guest for everyone else" : ""}`
       : "Legion roles: off (LEGION_ROLES and GUEST_ROLE_ID not set)"
   );
+  console.log(
+    cfg.classRoles.length
+      ? `Class roles: ${cfg.classRoles.map((c) => c.name).join(", ")}`
+      : "Class roles: off (CLASS_ROLES not set)"
+  );
   startGrantSweeper(client);
   startArchiveCleanup(client);
   startCooldownPruning();

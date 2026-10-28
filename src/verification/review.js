@@ -130,7 +130,7 @@ async function approve(interaction, reviewCase) {
   const { problems } = await grantAccess(
     member,
     charName,
-    reviewCase.character ? reviewCase.character.legion ?? null : undefined
+    reviewCase.character ?? undefined
   );
 
   await closeReviewMessage(interaction, {

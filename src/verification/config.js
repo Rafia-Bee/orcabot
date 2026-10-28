@@ -48,7 +48,7 @@ function requiredFromEnv(missing) {
   };
 }
 
-function parseLegionRoles(raw) {
+function parseRoleMap(raw, setting) {
   if (!raw || raw.trim() === "") return [];
   return raw
     .split(",")
@@ -59,10 +59,18 @@ function parseLegionRoles(raw) {
       const name = entry.slice(0, separator).trim();
       const roleId = entry.slice(separator + 1).trim();
       if (separator < 1 || !name || !/^\d+$/.test(roleId)) {
-        throw new Error(`LEGION_ROLES entry "${entry}" must look like LegionName:roleId`);
+        throw new Error(`${setting} entry "${entry}" must look like Name:roleId`);
       }
       return { name, roleId };
     });
+}
+
+function parseLegionRoles(raw) {
+  return parseRoleMap(raw, "LEGION_ROLES");
+}
+
+function parseClassRoles(raw) {
+  return parseRoleMap(raw, "CLASS_ROLES");
 }
 
 function loadConfig() {
@@ -122,6 +130,7 @@ function loadConfig() {
     archivedTicketsCategoryId: process.env.ARCHIVED_REVIEW_TICKETS_CATEGORY_ID,
     legionRoles: parseLegionRoles(process.env.LEGION_ROLES),
     guestRoleId: process.env.GUEST_ROLE_ID?.trim() || null,
+    classRoles: parseClassRoles(process.env.CLASS_ROLES),
     ...requirements,
     shugo,
     submitCooldownSeconds: intFromEnv("VERIFY_COOLDOWN_SECONDS", 60),
@@ -192,6 +201,7 @@ module.exports = {
   getConfig,
   missingKeys,
   parseLegionRoles,
+  parseClassRoles,
   EDITABLE_SETTINGS,
   updateSetting,
 };

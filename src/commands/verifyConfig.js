@@ -87,6 +87,12 @@ function buildSettingsEmbed() {
               ].join("\n")
             : "off (set LEGION_ROLES and GUEST_ROLE_ID in .env)",
       },
+      {
+        name: "Class roles",
+        value: cfg.classRoles.length
+          ? cfg.classRoles.map((c) => `${c.name} → ${role(c.roleId)}`).join("\n")
+          : "off (set CLASS_ROLES in .env)",
+      },
       { name: "Ticket gear slots", value: cfg.ticketGearSlots.join(", ") },
       {
         name: "shugo.gg",

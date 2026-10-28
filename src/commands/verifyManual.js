@@ -78,7 +78,7 @@ module.exports = {
     const { roleGranted, problems } = await grantAccess(
       member,
       character.name,
-      lookup.status === "found" ? character.legion ?? null : undefined
+      lookup.status === "found" ? character : undefined
     );
     if (!roleGranted) {
       store.deleteVerification(member.id);

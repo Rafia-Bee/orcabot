@@ -71,6 +71,7 @@ module.exports = {
           .addFields(
             { name: "Member", value: `<@${claim.discord_id}> (${claim.discord_id})` },
             { name: "Legion", value: claim.legion ? escapeMarkdown(claim.legion) : "—", inline: true },
+            { name: "Class", value: claim.class_name ?? "—", inline: true },
             { name: "Level", value: String(claim.level ?? "?"), inline: true },
             { name: "Gear score", value: String(claim.gear_score ?? "?"), inline: true },
             {

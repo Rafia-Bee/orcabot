@@ -9,39 +9,82 @@ function legionRolesEnabled(cfg) {
   return cfg.legionRoles.length > 0 || Boolean(cfg.guestRoleId);
 }
 
+function roleFor(map, fallbackRoleId, value) {
+  if (value === undefined) return undefined;
+  const key = (value ?? "").trim().toLowerCase();
+  const match = key ? map.find((entry) => entry.name.toLowerCase() === key) : null;
+  return match ? match.roleId : fallbackRoleId;
+}
+
 function legionRoleFor(cfg, legion) {
-  if (legion === undefined) return undefined;
-  const key = (legion ?? "").trim().toLowerCase();
-  const match = key ? cfg.legionRoles.find((l) => l.name.toLowerCase() === key) : null;
-  return match ? match.roleId : cfg.guestRoleId;
+  return roleFor(cfg.legionRoles, cfg.guestRoleId, legion);
+}
+
+function classRoleFor(cfg, className) {
+  return roleFor(cfg.classRoles, null, className);
 }
 
 function allianceRoleIds(cfg) {
   return [...cfg.legionRoles.map((l) => l.roleId), cfg.guestRoleId].filter(Boolean);
 }
 
-async function applyLegionRole(member, legion) {
-  const cfg = getConfig();
-  if (!legionRolesEnabled(cfg)) return [];
+function classRoleIds(cfg) {
+  return cfg.classRoles.map((c) => c.roleId);
+}
 
-  const target = legionRoleFor(cfg, legion);
-  if (target === undefined) {
-    return ["legion: unknown (no character data), give the legion or Guest role by hand"];
-  }
-
-  const stale = allianceRoleIds(cfg).filter((id) => id !== target && member.roles.cache.has(id));
+async function applyMappedRole(member, { label, roleIds, target, reason }) {
+  const stale = roleIds.filter((id) => id !== target && member.roles.cache.has(id));
   try {
-    if (stale.length) await member.roles.remove(stale, "Legion role changed");
-    if (target && !member.roles.cache.has(target)) {
-      await member.roles.add(target, `Legion: ${legion || "none"}`);
-    }
+    if (stale.length) await member.roles.remove(stale, `${label} role changed`);
+    if (target && !member.roles.cache.has(target)) await member.roles.add(target, reason);
     return [];
   } catch (error) {
-    return [`legion role: ${error.message}`];
+    return [`${label.toLowerCase()} role: ${error.message}`];
   }
 }
 
-async function grantAccess(member, charName, legion) {
+async function applyCharacterRoles(member, character) {
+  const cfg = getConfig();
+  const problems = [];
+
+  if (legionRolesEnabled(cfg)) {
+    const legion = character === undefined ? undefined : character.legion ?? null;
+    const target = legionRoleFor(cfg, legion);
+    if (target === undefined) {
+      problems.push("legion: unknown (no character data), give the legion or Guest role by hand");
+    } else {
+      problems.push(
+        ...(await applyMappedRole(member, {
+          label: "Legion",
+          roleIds: allianceRoleIds(cfg),
+          target,
+          reason: `Legion: ${legion || "none"}`,
+        }))
+      );
+    }
+  }
+
+  if (cfg.classRoles.length > 0) {
+    const className = character === undefined ? undefined : character.className ?? null;
+    const target = classRoleFor(cfg, className);
+    if (target === undefined) {
+      problems.push("class: unknown (no character data), give the class role by hand");
+    } else {
+      problems.push(
+        ...(await applyMappedRole(member, {
+          label: "Class",
+          roleIds: classRoleIds(cfg),
+          target,
+          reason: `Class: ${className || "unknown"}`,
+        }))
+      );
+    }
+  }
+
+  return problems;
+}
+
+async function grantAccess(member, charName, character) {
   const cfg = getConfig();
   const problems = [];
 
@@ -50,7 +93,7 @@ async function grantAccess(member, charName, legion) {
   } catch (error) {
     problems.push(`role: ${error.message}`);
   }
-  if (problems.length === 0) problems.push(...(await applyLegionRole(member, legion)));
+  if (problems.length === 0) problems.push(...(await applyCharacterRoles(member, character)));
 
   if (member.id === member.guild.ownerId || !member.manageable) {
     problems.push("nickname: member is above the bot's role");
@@ -69,7 +112,7 @@ async function revokeAccess(member) {
   const cfg = getConfig();
   const problems = [];
 
-  const toRemove = [cfg.verifiedRoleId, ...allianceRoleIds(cfg)].filter((id) =>
+  const toRemove = [cfg.verifiedRoleId, ...allianceRoleIds(cfg), ...classRoleIds(cfg)].filter((id) =>
     member.roles.cache.has(id)
   );
   if (toRemove.length) {
@@ -117,8 +160,11 @@ async function processGrant(client, grant) {
     return;
   }
 
-  const legion = store.getVerification(grant.discord_id)?.legion ?? null;
-  const { roleGranted, problems } = await grantAccess(member, grant.char_name, legion);
+  const claim = store.getVerification(grant.discord_id);
+  const { roleGranted, problems } = await grantAccess(member, grant.char_name, {
+    legion: claim?.legion ?? null,
+    className: claim?.class_name ?? null,
+  });
   if (problems.length > 0) {
     await postLog(
       client,
@@ -157,5 +203,6 @@ module.exports = {
   randomGrantDelayMs,
   startGrantSweeper,
   legionRoleFor,
+  classRoleFor,
   legionRolesEnabled,
 };

@@ -42,6 +42,9 @@ for (const file of commandFiles) {
 
 client.once("clientReady", () => {
   console.log(`Logged in as ${client.user.tag}`);
+  for (const command of client.commands.values()) {
+    if (command.onReady) command.onReady(client);
+  }
 });
 
 // Handle unhandled promise rejections

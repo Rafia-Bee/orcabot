@@ -6,16 +6,60 @@ function intFromEnv(key, fallback) {
   return value;
 }
 
-function listFromEnv(key, fallback) {
-  const raw = process.env[key];
-  if (!raw || raw.trim() === "") return fallback;
-  return raw
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+function requiredFromEnv(missing) {
+  const raw = (key) => {
+    const value = process.env[key];
+    if (value === undefined || value.trim() === "") {
+      missing.push(key);
+      return null;
+    }
+    return value.trim();
+  };
+  return {
+    string: (key) => raw(key),
+    int: (key) => {
+      const value = raw(key);
+      if (value === null) return null;
+      const parsed = Number.parseInt(value, 10);
+      if (Number.isNaN(parsed) || parsed < 0) {
+        throw new Error(`${key} must be a non-negative number, got "${value}"`);
+      }
+      return parsed;
+    },
+    list: (key) => {
+      const value = raw(key);
+      if (value === null) return null;
+      const items = value.split(",").map((item) => item.trim()).filter(Boolean);
+      if (items.length === 0) missing.push(key);
+      return items;
+    },
+  };
 }
 
 function loadConfig() {
+  const missing = [];
+  const env = requiredFromEnv(missing);
+  const requirements = {
+    requiredFaction: env.string("REQUIRED_FACTION"),
+    requiredServer: env.string("REQUIRED_SERVER"),
+    minLevel: env.int("MIN_LEVEL"),
+    minGearScore: env.int("MIN_GS"),
+    minAccountAgeDays: env.int("MIN_ACCOUNT_AGE_DAYS"),
+    challengeSlots: env.list("CHALLENGE_SLOTS"),
+    maxNameLength: env.int("MAX_CHARACTER_NAME_LENGTH"),
+  };
+  const shugo = {
+    baseUrl: env.string("SHUGO_BASE_URL")?.replace(/\/+$/, ""),
+    regionPath: env.string("SHUGO_REGION_PATH")?.replace(/^\/+|\/+$/g, ""),
+    userAgent: env.string("SHUGO_USER_AGENT"),
+    requestTimeoutMs: env.int("SHUGO_REQUEST_TIMEOUT_MS"),
+    minRequestGapMs: env.int("SHUGO_MIN_REQUEST_GAP_MS"),
+    cacheTtlMs: env.int("SHUGO_CACHE_TTL_MS"),
+  };
+  if (missing.length > 0) {
+    throw new Error(`Missing verification settings in .env: ${missing.join(", ")}`);
+  }
+
   const mode = (process.env.VERIFY_MODE || "shadow").trim();
   if (!["shadow", "live"].includes(mode)) {
     throw new Error(`VERIFY_MODE must be "shadow" or "live", got "${mode}"`);
@@ -25,19 +69,25 @@ function loadConfig() {
     throw new Error(`GEAR_CHECK must be "risky_only" or "always", got "${gearCheck}"`);
   }
 
+  const grantDelayMinSeconds = intFromEnv("VERIFY_GRANT_DELAY_MIN_SECONDS", 60);
+  const grantDelayMaxSeconds = intFromEnv("VERIFY_GRANT_DELAY_MAX_SECONDS", 300);
+  if (grantDelayMinSeconds < 0 || grantDelayMaxSeconds < grantDelayMinSeconds) {
+    throw new Error(
+      "VERIFY_GRANT_DELAY_MIN_SECONDS must be >= 0 and <= VERIFY_GRANT_DELAY_MAX_SECONDS"
+    );
+  }
+
   return {
     mode,
+    grantDelayMinSeconds,
+    grantDelayMaxSeconds,
     verifiedRoleId: process.env.VERIFIED_ROLE_ID,
     verifyChannelId: process.env.VERIFY_CHANNEL_ID,
     logChannelId: process.env.VERIFY_LOG_CHANNEL_ID,
     reviewChannelId: process.env.VERIFY_REVIEW_CHANNEL_ID,
-    requiredFaction: process.env.REQUIRED_FACTION || "Asmodians",
-    requiredServer: process.env.REQUIRED_SERVER || "Israphel",
-    minLevel: intFromEnv("MIN_LEVEL", 45),
-    minGearScore: intFromEnv("MIN_GS", 2100),
-    minAccountAgeDays: intFromEnv("MIN_ACCOUNT_AGE_DAYS", 90),
+    ...requirements,
+    shugo,
     gearCheck,
-    challengeSlots: listFromEnv("CHALLENGE_SLOTS", ["Belt"]),
     challengeTtlMinutes: intFromEnv("CHALLENGE_TTL_MINUTES", 15),
     submitCooldownSeconds: intFromEnv("VERIFY_COOLDOWN_SECONDS", 60),
   };
@@ -55,4 +105,11 @@ function missingKeys(config) {
     .map(([key]) => key);
 }
 
-module.exports = { loadConfig, missingKeys };
+let cachedConfig = null;
+
+function getConfig() {
+  if (!cachedConfig) cachedConfig = loadConfig();
+  return cachedConfig;
+}
+
+module.exports = { loadConfig, getConfig, missingKeys };

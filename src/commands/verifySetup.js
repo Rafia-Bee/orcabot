@@ -5,11 +5,11 @@ const {
 } = require("discord.js");
 const {
   CUSTOM_ID_PREFIX,
-  getConfig,
   buildVerifyPanel,
   handleComponent,
+  onReady,
 } = require("../verification/interactions");
-const { missingKeys } = require("../verification/config");
+const { getConfig, missingKeys } = require("../verification/config");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -18,6 +18,7 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild),
   customIdPrefix: CUSTOM_ID_PREFIX,
   handleComponent,
+  onReady,
   async execute(interaction) {
     if (
       !interaction.member.permissions.has(PermissionsBitField.Flags.ManageGuild)

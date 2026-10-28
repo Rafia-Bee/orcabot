@@ -1,11 +1,4 @@
-const BASE_URL = "https://shugo.gg/character";
-const REGION_PATH = process.env.SHUGO_REGION_PATH || "global/eu-israphel";
-
-const USER_AGENT = "OrcaBot/1.0 (Discord faction verification)";
-const REQUEST_TIMEOUT_MS = 15_000;
-const MIN_REQUEST_GAP_MS = 3_000;
-const CACHE_TTL_MS = 60_000;
-const MAX_NAME_LENGTH = 32;
+const { getConfig } = require("./config");
 
 const PROFILE_JSON_RE =
   /<script type="application\/json" id="shugo-profile">([\s\S]*?)<\/script>/;
@@ -16,14 +9,15 @@ let nextRequestAt = 0;
 let pausedUntil = 0;
 
 function characterUrl(name) {
-  return `${BASE_URL}/${REGION_PATH}/${encodeURIComponent(name)}`;
+  const { baseUrl, regionPath } = getConfig().shugo;
+  return `${baseUrl}/${regionPath}/${encodeURIComponent(name)}`;
 }
 
 function isValidName(name) {
   return (
     typeof name === "string" &&
     name.length > 0 &&
-    name.length <= MAX_NAME_LENGTH &&
+    name.length <= getConfig().maxNameLength &&
     !/[\s/\\?#%]/.test(name)
   );
 }
@@ -35,7 +29,7 @@ function enqueue(fn) {
     try {
       return await fn();
     } finally {
-      nextRequestAt = Date.now() + MIN_REQUEST_GAP_MS;
+      nextRequestAt = Date.now() + getConfig().shugo.minRequestGapMs;
     }
   });
   queue = run.catch(() => {});
@@ -83,13 +77,14 @@ async function fetchCharacter(name) {
     return { status: "unavailable", reason: "rate_limited" };
   }
 
+  const { userAgent, requestTimeoutMs } = getConfig().shugo;
   const url = characterUrl(name);
   let res;
   try {
     res = await fetch(url, {
-      headers: { "User-Agent": USER_AGENT },
+      headers: { "User-Agent": userAgent },
       redirect: "manual",
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(requestTimeoutMs),
     });
   } catch (error) {
     return { status: "unavailable", reason: `network: ${error.message}` };
@@ -129,7 +124,7 @@ async function lookupCharacter(rawName, { fresh = false } = {}) {
       const now = Date.now();
       for (const [k, v] of cache) if (v.expiresAt <= now) cache.delete(k);
     }
-    cache.set(key, { result, expiresAt: Date.now() + CACHE_TTL_MS });
+    cache.set(key, { result, expiresAt: Date.now() + getConfig().shugo.cacheTtlMs });
   }
   return result;
 }

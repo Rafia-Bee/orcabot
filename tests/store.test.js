@@ -127,6 +127,22 @@ test("review cases", async (t) => {
   });
 });
 
+test("scheduled grants", () => {
+  const store = openStore(":memory:");
+  const now = Date.now();
+  store.scheduleGrant({ discordId: "1", guildId: "g", charName: "dieyoung", dueAt: now + 60_000 });
+  store.scheduleGrant({ discordId: "2", guildId: "g", charName: "other", dueAt: now - 1 });
+  assert.equal(store.getScheduledGrant("1").char_name, "dieyoung");
+  assert.deepEqual(store.getDueGrants(now).map((g) => g.discord_id), ["2"]);
+
+  store.scheduleGrant({ discordId: "1", guildId: "g", charName: "dieyoung", dueAt: now - 5 });
+  assert.deepEqual(store.getDueGrants(now).map((g) => g.discord_id), ["1", "2"]);
+
+  assert.equal(store.deleteScheduledGrant("1"), true);
+  assert.equal(store.getScheduledGrant("1"), null);
+  store.close();
+});
+
 test("cooldowns", () => {
   const store = openStore(":memory:");
   assert.equal(store.getCooldownRemaining("1"), 0);

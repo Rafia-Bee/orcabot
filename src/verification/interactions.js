@@ -10,44 +10,18 @@ const {
   TextInputStyle,
   escapeMarkdown,
 } = require("discord.js");
-const { loadConfig } = require("./config");
+const { getConfig } = require("./config");
 const { getStore } = require("./store");
 const { lookupCharacter } = require("./shugo");
 const { decide, OUTCOMES, DAY_MS } = require("./rules");
+const { buildSubmissionEmbed, postLog, unixSeconds } = require("./embeds");
+const { randomGrantDelayMs, startGrantSweeper } = require("./access");
+const { openReviewCase, isReviewButton, handleReviewButton } = require("./review");
 
 const CUSTOM_ID_PREFIX = "verify";
 const OPEN_BUTTON_ID = "verify:open";
 const SUBMIT_MODAL_ID = "verify:submit";
 const NAME_INPUT_ID = "character_name";
-
-const OUTCOME_STYLE = {
-  [OUTCOMES.VERIFY]: { label: "verify", emoji: "✅", color: 0x2ecc71 },
-  [OUTCOMES.CHALLENGE]: { label: "send a gear challenge", emoji: "🧪", color: 0x3498db },
-  [OUTCOMES.REVIEW]: { label: "send to mod review", emoji: "🕵️", color: 0xf1c40f },
-  [OUTCOMES.DENY]: { label: "deny", emoji: "⛔", color: 0xe74c3c },
-  [OUTCOMES.RETRY]: { label: "ask the member to retry", emoji: "↩️", color: 0x95a5a6 },
-};
-
-const REASON_TEXT = {
-  passed: "All checks passed",
-  invalid_name: "Not a valid character name",
-  not_found: "Character not found",
-  account_too_new: "Discord account is too new",
-  shugo_unavailable: "shugo.gg lookup failed",
-  wrong_faction: "Wrong faction",
-  wrong_server: "Wrong server",
-  level_too_low: "Level below minimum",
-  gear_score_too_low: "Gear score below minimum",
-  account_has_other_claim: "This Discord account already claimed a different character",
-  name_already_claimed: "Character already claimed by another Discord account",
-  gear_check_always: "Gear check required for everyone (GEAR_CHECK=always)",
-};
-
-let config = null;
-function getConfig() {
-  if (!config) config = loadConfig();
-  return config;
-}
 
 function buildVerifyPanel() {
   const cfg = getConfig();
@@ -87,86 +61,56 @@ function buildNameModal() {
             .setCustomId(NAME_INPUT_ID)
             .setStyle(TextInputStyle.Short)
             .setMinLength(1)
-            .setMaxLength(32)
+            .setMaxLength(cfg.maxNameLength)
             .setRequired(true)
         )
     );
 }
 
-function memberMessage(decision, submittedName, lookup) {
-  const name = escapeMarkdown(
-    lookup.status === "found" ? lookup.character.name : submittedName
-  );
+function memberMessage(outcome, reason, name) {
   const cfg = getConfig();
-  if (decision.reason === "invalid_name") {
+  const safeName = escapeMarkdown(name);
+  if (reason === "invalid_name") {
     return "That doesn't look like a valid character name. Check it and try again.";
   }
-  if (decision.reason === "not_found") {
+  if (reason === "not_found") {
     return (
-      `We couldn't find **${name}** on ${cfg.requiredServer}. ` +
+      `We couldn't find **${safeName}** on ${cfg.requiredServer}. ` +
       "Check the spelling, including capital letters and special characters, and submit again."
     );
   }
-  return `Thanks! Your request for **${name}** has been received. A moderator will verify you shortly.`;
-}
-
-function buildLogEmbed({ user, submittedName, lookup, decision, accountAgeMs }) {
-  const cfg = getConfig();
-  const style = OUTCOME_STYLE[decision.outcome];
-  const accountAgeDays = Math.floor(accountAgeMs / DAY_MS);
-  const ageWarning = accountAgeDays < cfg.minAccountAgeDays ? " ⚠" : "";
-  const prefix = cfg.mode === "shadow" ? "[Shadow] Would " : "";
-
-  const embed = new EmbedBuilder()
-    .setColor(style.color)
-    .setTitle(`${style.emoji} ${prefix}${style.label}`)
-    .setDescription(`<@${user.id}> submitted **${escapeMarkdown(submittedName)}**`)
-    .addFields(
-      { name: "Reason", value: REASON_TEXT[decision.reason] ?? decision.reason },
-      { name: "Account age", value: `${accountAgeDays} days${ageWarning}`, inline: true },
-      { name: "User ID", value: user.id, inline: true }
-    )
-    .setTimestamp();
-
-  if (lookup.status === "found") {
-    const c = lookup.character;
-    embed.addFields(
-      {
-        name: "Character",
-        value: `[${escapeMarkdown(c.name)}](${c.url}) · ${c.className}`,
-      },
-      { name: "Level", value: String(c.level), inline: true },
-      { name: "Gear score", value: String(c.gearScore ?? "?"), inline: true },
-      { name: "Combat power", value: c.combatPower?.toLocaleString("en-US") ?? "?", inline: true },
-      { name: "Faction / Server", value: `${c.faction} / ${c.server}`, inline: true },
-      { name: "Legion", value: c.legion ? escapeMarkdown(c.legion) : "—", inline: true }
+  if (cfg.mode === "live" && outcome === OUTCOMES.DENY) {
+    if (reason === "wrong_faction" || reason === "wrong_server") {
+      return `**${safeName}** isn't eligible. This server is for ${cfg.requiredFaction} on ${cfg.requiredServer} only.`;
+    }
+    return (
+      `**${safeName}** doesn't meet the requirements yet ` +
+      `(Level ${cfg.minLevel}+, gear score ${cfg.minGearScore}+). Submit again once it does.`
     );
-  } else if (lookup.status === "unavailable") {
-    embed.addFields({ name: "Lookup error", value: lookup.reason });
   }
-
-  if (decision.details?.claimedBy) {
-    embed.addFields({
-      name: "Already claimed by",
-      value: `<@${decision.details.claimedBy}> (${decision.details.claimedBy})`,
-    });
-  }
-  if (decision.details?.claimedCharacter) {
-    embed.addFields({
-      name: "Previously claimed",
-      value: escapeMarkdown(decision.details.claimedCharacter),
-    });
-  }
-  return embed;
+  return `Thanks! Your request for **${safeName}** has been received. A moderator will verify you shortly.`;
 }
 
-async function postLog(client, embed) {
+function scheduleVerifiedGrant(interaction, character) {
+  const store = getStore();
   try {
-    const channel = await client.channels.fetch(getConfig().logChannelId);
-    await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+    store.saveVerification({
+      discordId: interaction.user.id,
+      character,
+      method: "auto",
+    });
   } catch (error) {
-    console.error("Failed to post to verification log channel:", error);
+    if (error.code === "CHAR_CLAIMED") return { claimedBy: error.claimedBy };
+    throw error;
   }
+  const dueAt = Date.now() + randomGrantDelayMs();
+  store.scheduleGrant({
+    discordId: interaction.user.id,
+    guildId: interaction.guildId,
+    charName: character.name,
+    dueAt,
+  });
+  return { dueAt };
 }
 
 async function handleSubmit(interaction) {
@@ -179,16 +123,15 @@ async function handleSubmit(interaction) {
   if (interaction.member.roles.cache.has(cfg.verifiedRoleId)) {
     return interaction.editReply("You're already verified.");
   }
-
+  if (store.getScheduledGrant(userId) || store.getOpenReviewCase(userId)) {
+    return interaction.editReply(
+      "Your request has already been received. A moderator will verify you shortly."
+    );
+  }
   const cooldownMs = store.getCooldownRemaining(userId);
   if (cooldownMs > 0) {
     return interaction.editReply(
       `Please wait ${Math.ceil(cooldownMs / 1000)} seconds before trying again.`
-    );
-  }
-  if (store.getOpenReviewCase(userId)) {
-    return interaction.editReply(
-      "Your request is already waiting for a moderator. Please be patient."
     );
   }
   store.setCooldown(userId, cfg.submitCooldownSeconds * 1000);
@@ -196,24 +139,68 @@ async function handleSubmit(interaction) {
   const submittedName = interaction.fields.getTextInputValue(NAME_INPUT_ID).trim();
   const lookup = await lookupCharacter(submittedName);
   if (lookup.status === "invalid_name") store.setCooldown(userId, 0);
+  const character = lookup.status === "found" ? lookup.character : null;
   const accountAgeMs = Date.now() - interaction.user.createdTimestamp;
   const decision = decide({
     lookup,
     accountAgeMs,
-    charClaim:
-      lookup.status === "found"
-        ? store.getVerificationByCharName(lookup.character.name)
-        : null,
+    charClaim: character ? store.getVerificationByCharName(character.name) : null,
     ownClaim: store.getVerification(userId),
     discordId: userId,
     config: cfg,
   });
+  const displayName = character ? character.name : submittedName;
 
-  await postLog(
-    interaction.client,
-    buildLogEmbed({ user: interaction.user, submittedName, lookup, decision, accountAgeMs })
-  );
-  return interaction.editReply(memberMessage(decision, submittedName, lookup));
+  let outcome = decision.outcome;
+  let reason = decision.reason;
+  const logFields = [];
+
+  if (cfg.mode === "live") {
+    if (outcome === OUTCOMES.VERIFY) {
+      const grant = scheduleVerifiedGrant(interaction, character);
+      if (grant.claimedBy) {
+        outcome = OUTCOMES.REVIEW;
+        reason = "name_already_claimed";
+        decision.details = { claimedBy: grant.claimedBy };
+      } else {
+        logFields.push({
+          name: "Role granted",
+          value: `<t:${unixSeconds(grant.dueAt)}:R>`,
+          inline: true,
+        });
+      }
+    }
+
+    if (outcome === OUTCOMES.CHALLENGE) outcome = OUTCOMES.REVIEW;
+
+    if (outcome === OUTCOMES.REVIEW) {
+      const reviewCase = await openReviewCase(interaction.client, {
+        discordId: userId,
+        charName: displayName,
+        reason,
+        character,
+        context: {
+          accountAgeDays: Math.floor(accountAgeMs / DAY_MS),
+          lookupError: lookup.status === "unavailable" ? lookup.reason : null,
+          details: decision.details,
+        },
+      });
+      logFields.push({ name: "Review case", value: `#${reviewCase.id}`, inline: true });
+    }
+  }
+
+  const logEmbed = buildSubmissionEmbed({
+    user: interaction.user,
+    submittedName,
+    lookup,
+    decision: { ...decision, reason },
+    outcome,
+    accountAgeMs,
+  });
+  if (logFields.length) logEmbed.addFields(logFields);
+  await postLog(interaction.client, logEmbed);
+
+  return interaction.editReply(memberMessage(outcome, reason, displayName));
 }
 
 async function handleComponent(interaction) {
@@ -223,11 +210,20 @@ async function handleComponent(interaction) {
   if (interaction.isModalSubmit() && interaction.customId === SUBMIT_MODAL_ID) {
     return handleSubmit(interaction);
   }
+  if (interaction.isButton() && isReviewButton(interaction.customId)) {
+    return handleReviewButton(interaction);
+  }
+}
+
+function onReady(client) {
+  const cfg = getConfig();
+  console.log(`Verification mode: ${cfg.mode}`);
+  startGrantSweeper(client);
 }
 
 module.exports = {
   CUSTOM_ID_PREFIX,
-  getConfig,
   buildVerifyPanel,
   handleComponent,
+  onReady,
 };

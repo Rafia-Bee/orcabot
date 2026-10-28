@@ -45,6 +45,13 @@ CREATE TABLE IF NOT EXISTS review_cases (
 CREATE INDEX IF NOT EXISTS review_cases_open
   ON review_cases (discord_id) WHERE status = 'open';
 
+CREATE TABLE IF NOT EXISTS scheduled_grants (
+  discord_id       TEXT PRIMARY KEY,
+  guild_id         TEXT NOT NULL,
+  char_name        TEXT NOT NULL,
+  due_at           INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS cooldowns (
   discord_id       TEXT PRIMARY KEY,
   next_allowed_at  INTEGER NOT NULL
@@ -146,6 +153,24 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
       UPDATE review_cases SET status = ?, resolved_by = ?, resolved_at = ?
       WHERE id = ? AND status = 'open'
     `),
+
+    upsertScheduledGrant: db.prepare(`
+      INSERT INTO scheduled_grants (discord_id, guild_id, char_name, due_at)
+      VALUES (@discord_id, @guild_id, @char_name, @due_at)
+      ON CONFLICT (discord_id) DO UPDATE SET
+        guild_id = excluded.guild_id,
+        char_name = excluded.char_name,
+        due_at = excluded.due_at
+    `),
+    scheduledGrant: db.prepare(
+      "SELECT * FROM scheduled_grants WHERE discord_id = ?"
+    ),
+    dueGrants: db.prepare(
+      "SELECT * FROM scheduled_grants WHERE due_at <= ? ORDER BY due_at"
+    ),
+    deleteScheduledGrant: db.prepare(
+      "DELETE FROM scheduled_grants WHERE discord_id = ?"
+    ),
 
     cooldown: db.prepare(
       "SELECT next_allowed_at FROM cooldowns WHERE discord_id = ?"
@@ -256,6 +281,27 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
 
     resolveReviewCase(id, status, resolvedBy) {
       return stmt.resolveReviewCase.run(status, resolvedBy, Date.now(), id).changes > 0;
+    },
+
+    scheduleGrant({ discordId, guildId, charName, dueAt }) {
+      stmt.upsertScheduledGrant.run({
+        discord_id: discordId,
+        guild_id: guildId,
+        char_name: charName,
+        due_at: dueAt,
+      });
+    },
+
+    getScheduledGrant(discordId) {
+      return stmt.scheduledGrant.get(discordId) ?? null;
+    },
+
+    getDueGrants(now = Date.now()) {
+      return stmt.dueGrants.all(now);
+    },
+
+    deleteScheduledGrant(discordId) {
+      return stmt.deleteScheduledGrant.run(discordId).changes > 0;
     },
 
     getCooldownRemaining(discordId, now = Date.now()) {

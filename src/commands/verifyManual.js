@@ -75,7 +75,11 @@ module.exports = {
     }
     store.deleteScheduledGrant(member.id);
 
-    const { roleGranted, problems } = await grantAccess(member, character.name);
+    const { roleGranted, problems } = await grantAccess(
+      member,
+      character.name,
+      lookup.status === "found" ? character.legion ?? null : undefined
+    );
     if (!roleGranted) {
       store.deleteVerification(member.id);
       return interaction.editReply(`Couldn't give the Verified role: ${problems.join("; ")}`);

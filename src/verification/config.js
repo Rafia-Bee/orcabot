@@ -48,6 +48,23 @@ function requiredFromEnv(missing) {
   };
 }
 
+function parseLegionRoles(raw) {
+  if (!raw || raw.trim() === "") return [];
+  return raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const separator = entry.lastIndexOf(":");
+      const name = entry.slice(0, separator).trim();
+      const roleId = entry.slice(separator + 1).trim();
+      if (separator < 1 || !name || !/^\d+$/.test(roleId)) {
+        throw new Error(`LEGION_ROLES entry "${entry}" must look like LegionName:roleId`);
+      }
+      return { name, roleId };
+    });
+}
+
 function loadConfig() {
   const missing = [];
   const env = requiredFromEnv(missing);
@@ -103,6 +120,8 @@ function loadConfig() {
     officersRoleId: process.env.OFFICERS_ROLE_ID,
     ticketsCategoryId: process.env.REVIEW_TICKETS_CATEGORY_ID,
     archivedTicketsCategoryId: process.env.ARCHIVED_REVIEW_TICKETS_CATEGORY_ID,
+    legionRoles: parseLegionRoles(process.env.LEGION_ROLES),
+    guestRoleId: process.env.GUEST_ROLE_ID?.trim() || null,
     ...requirements,
     shugo,
     submitCooldownSeconds: intFromEnv("VERIFY_COOLDOWN_SECONDS", 60),
@@ -168,4 +187,11 @@ function updateSetting(key, value) {
   return { previous, current: String(value) };
 }
 
-module.exports = { loadConfig, getConfig, missingKeys, EDITABLE_SETTINGS, updateSetting };
+module.exports = {
+  loadConfig,
+  getConfig,
+  missingKeys,
+  parseLegionRoles,
+  EDITABLE_SETTINGS,
+  updateSetting,
+};

@@ -77,6 +77,16 @@ function buildSettingsEmbed() {
         value: channel(cfg.archivedTicketsCategoryId),
         inline: true,
       },
+      {
+        name: "Legion roles",
+        value:
+          cfg.legionRoles.length || cfg.guestRoleId
+            ? [
+                ...cfg.legionRoles.map((l) => `${l.name} → ${role(l.roleId)}`),
+                `No matching legion → ${role(cfg.guestRoleId)}`,
+              ].join("\n")
+            : "off (set LEGION_ROLES and GUEST_ROLE_ID in .env)",
+      },
       { name: "Ticket gear slots", value: cfg.ticketGearSlots.join(", ") },
       {
         name: "shugo.gg",

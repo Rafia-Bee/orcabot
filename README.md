@@ -45,6 +45,8 @@ You'll need:
 | `BOT_OWNER_ID` | Your own user ID (lets you use `/stfu`) |
 | `VERIFIED_ROLE_ID` | The role that unlocks the server |
 | `OFFICERS_ROLE_ID` | The role that handles review tickets |
+| `LEGION_ROLES` | *(optional)* Your alliance legions and their roles, like `Aegis:<role id>,SDC:<role id>`. The names must match shugo.gg. |
+| `GUEST_ROLE_ID` | *(optional)* The role for verified members who aren't in one of those legions |
 | `VERIFY_CHANNEL_ID` | Where new members click **Verify** |
 | `VERIFY_LOG_CHANNEL_ID` | Mods-only log of everything the bot does |
 | `VERIFY_REVIEW_CHANNEL_ID` | Mods-only channel for cases that need a human |
@@ -63,7 +65,7 @@ Never share your `.env` file. It's already left out of git.
   - The log and review channels: mods only.
   - The ticket categories: officers only. The bot handles the rest.
   - Everything else in the server: `Verified` only.
-- **Role order:** in **Server Settings → Roles**, drag the bot's role **above** `Verified` and any other role it should hand out. The bot can't change roles or nicknames for anyone at or above its own role.
+- **Role order:** in **Server Settings → Roles**, drag the bot's role **above** `Verified`, the legion and Guest roles, and any other role it should hand out. The bot can't change roles or nicknames for anyone at or above its own role.
 
 ### 5. Register the commands and start the bot
 
@@ -148,9 +150,10 @@ That's it. Pushes to `main` now deploy automatically (you can watch them in the 
    - **Wrong faction or server:** they're turned away.
    - **Typo or unknown name:** they're asked to try again.
    - **Anything unusual** (the name's already claimed by someone else, or the lookup site is down): it goes to the review channel with **Approve** and **Deny** buttons.
-3. Each character can only belong to one Discord account.
-4. Archived tickets are deleted after 7 days without messages.
-5. If a flood of Verify requests comes in at once (a raid), the bot pauses verification for a few minutes and warns the mods. Members are asked to try again shortly.
+3. Along with `Verified`, members get their legion's role, or Guest if their legion isn't in the alliance (only if `LEGION_ROLES` / `GUEST_ROLE_ID` are set). If someone changes legion, use `/verify-manual` on them again to swap the role.
+4. Each character can only belong to one Discord account.
+5. Archived tickets are deleted after 7 days without messages.
+6. If a flood of Verify requests comes in at once (a raid), the bot pauses verification for a few minutes and warns the mods. Members are asked to try again shortly.
 
 Members never see how the checks work. All the details go to the mods-only channels.
 

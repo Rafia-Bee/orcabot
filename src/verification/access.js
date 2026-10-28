@@ -5,7 +5,43 @@ const { COLORS, buildEventEmbed, postLog } = require("./embeds");
 
 const SWEEP_INTERVAL_MS = 15_000;
 
-async function grantAccess(member, charName) {
+function legionRolesEnabled(cfg) {
+  return cfg.legionRoles.length > 0 || Boolean(cfg.guestRoleId);
+}
+
+function legionRoleFor(cfg, legion) {
+  if (legion === undefined) return undefined;
+  const key = (legion ?? "").trim().toLowerCase();
+  const match = key ? cfg.legionRoles.find((l) => l.name.toLowerCase() === key) : null;
+  return match ? match.roleId : cfg.guestRoleId;
+}
+
+function allianceRoleIds(cfg) {
+  return [...cfg.legionRoles.map((l) => l.roleId), cfg.guestRoleId].filter(Boolean);
+}
+
+async function applyLegionRole(member, legion) {
+  const cfg = getConfig();
+  if (!legionRolesEnabled(cfg)) return [];
+
+  const target = legionRoleFor(cfg, legion);
+  if (target === undefined) {
+    return ["legion: unknown (no character data), give the legion or Guest role by hand"];
+  }
+
+  const stale = allianceRoleIds(cfg).filter((id) => id !== target && member.roles.cache.has(id));
+  try {
+    if (stale.length) await member.roles.remove(stale, "Legion role changed");
+    if (target && !member.roles.cache.has(target)) {
+      await member.roles.add(target, `Legion: ${legion || "none"}`);
+    }
+    return [];
+  } catch (error) {
+    return [`legion role: ${error.message}`];
+  }
+}
+
+async function grantAccess(member, charName, legion) {
   const cfg = getConfig();
   const problems = [];
 
@@ -14,6 +50,7 @@ async function grantAccess(member, charName) {
   } catch (error) {
     problems.push(`role: ${error.message}`);
   }
+  if (problems.length === 0) problems.push(...(await applyLegionRole(member, legion)));
 
   if (member.id === member.guild.ownerId || !member.manageable) {
     problems.push("nickname: member is above the bot's role");
@@ -32,9 +69,12 @@ async function revokeAccess(member) {
   const cfg = getConfig();
   const problems = [];
 
-  if (member.roles.cache.has(cfg.verifiedRoleId)) {
+  const toRemove = [cfg.verifiedRoleId, ...allianceRoleIds(cfg)].filter((id) =>
+    member.roles.cache.has(id)
+  );
+  if (toRemove.length) {
     try {
-      await member.roles.remove(cfg.verifiedRoleId, "Unverified");
+      await member.roles.remove(toRemove, "Unverified");
     } catch (error) {
       problems.push(`role: ${error.message}`);
     }
@@ -77,7 +117,8 @@ async function processGrant(client, grant) {
     return;
   }
 
-  const { roleGranted, problems } = await grantAccess(member, grant.char_name);
+  const legion = store.getVerification(grant.discord_id)?.legion ?? null;
+  const { roleGranted, problems } = await grantAccess(member, grant.char_name, legion);
   if (problems.length > 0) {
     await postLog(
       client,
@@ -110,4 +151,11 @@ function startGrantSweeper(client) {
   return setInterval(sweep, SWEEP_INTERVAL_MS);
 }
 
-module.exports = { grantAccess, revokeAccess, randomGrantDelayMs, startGrantSweeper };
+module.exports = {
+  grantAccess,
+  revokeAccess,
+  randomGrantDelayMs,
+  startGrantSweeper,
+  legionRoleFor,
+  legionRolesEnabled,
+};

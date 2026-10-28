@@ -335,6 +335,11 @@ function startCooldownPruning() {
 function onReady(client) {
   const cfg = getConfig();
   console.log(`Verification mode: ${cfg.mode}`);
+  console.log(
+    cfg.legionRoles.length || cfg.guestRoleId
+      ? `Legion roles: ${cfg.legionRoles.map((l) => l.name).join(", ")}${cfg.guestRoleId ? ", Guest for everyone else" : ""}`
+      : "Legion roles: off (LEGION_ROLES and GUEST_ROLE_ID not set)"
+  );
   startGrantSweeper(client);
   startArchiveCleanup(client);
   startCooldownPruning();

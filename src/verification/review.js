@@ -127,7 +127,11 @@ async function approve(interaction, reviewCase) {
     method: "manual",
     reviewedBy: modId,
   });
-  const { problems } = await grantAccess(member, charName);
+  const { problems } = await grantAccess(
+    member,
+    charName,
+    reviewCase.character ? reviewCase.character.legion ?? null : undefined
+  );
 
   await closeReviewMessage(interaction, {
     color: COLORS.green,

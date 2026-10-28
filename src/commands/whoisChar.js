@@ -70,6 +70,7 @@ module.exports = {
           .setTitle(claim.char_name)
           .addFields(
             { name: "Member", value: `<@${claim.discord_id}> (${claim.discord_id})` },
+            { name: "Legion", value: claim.legion ? escapeMarkdown(claim.legion) : "—", inline: true },
             { name: "Level", value: String(claim.level ?? "?"), inline: true },
             { name: "Gear score", value: String(claim.gear_score ?? "?"), inline: true },
             {

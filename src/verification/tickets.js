@@ -276,7 +276,7 @@ async function confirmVerify(interaction, ticket) {
     method: "ticket",
     reviewedBy: interaction.user.id,
   });
-  const { roleGranted, problems } = await grantAccess(member, ticket.char_name);
+  const { roleGranted, problems } = await grantAccess(member, ticket.char_name, ticket.character?.legion ?? null);
   if (!roleGranted) {
     store.deleteVerification(member.id);
     store.reopenTicket(ticket.id);

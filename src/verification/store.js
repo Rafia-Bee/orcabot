@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS verifications (
   level            INTEGER,
   gear_score       INTEGER,
   combat_power     INTEGER,
+  legion           TEXT,
   method           TEXT NOT NULL,
   reviewed_by      TEXT,
   created_at       INTEGER NOT NULL
@@ -83,6 +84,10 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
   const db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
   db.exec(SCHEMA);
+  const verificationColumns = db.prepare("PRAGMA table_info(verifications)").all().map((c) => c.name);
+  if (!verificationColumns.includes("legion")) {
+    db.exec("ALTER TABLE verifications ADD COLUMN legion TEXT");
+  }
 
   const stmt = {
     verificationByDiscordId: db.prepare(
@@ -93,10 +98,10 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
     ),
     upsertVerification: db.prepare(`
       INSERT INTO verifications
-        (discord_id, char_name, char_name_lower, level, gear_score, combat_power,
+        (discord_id, char_name, char_name_lower, level, gear_score, combat_power, legion,
          method, reviewed_by, created_at)
       VALUES
-        (@discord_id, @char_name, @char_name_lower, @level, @gear_score, @combat_power,
+        (@discord_id, @char_name, @char_name_lower, @level, @gear_score, @combat_power, @legion,
          @method, @reviewed_by, @created_at)
       ON CONFLICT (discord_id) DO UPDATE SET
         char_name = excluded.char_name,
@@ -104,6 +109,7 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
         level = excluded.level,
         gear_score = excluded.gear_score,
         combat_power = excluded.combat_power,
+        legion = excluded.legion,
         method = excluded.method,
         reviewed_by = excluded.reviewed_by,
         created_at = excluded.created_at
@@ -207,6 +213,7 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
         level: character.level ?? null,
         gear_score: character.gearScore ?? null,
         combat_power: character.combatPower ?? null,
+        legion: character.legion ?? null,
         method,
         reviewed_by: reviewedBy,
         created_at: Date.now(),

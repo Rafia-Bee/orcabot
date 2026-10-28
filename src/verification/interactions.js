@@ -29,6 +29,8 @@ const {
   openTicket,
   isTicketButton,
   handleTicketButton,
+  isTicketDenyModal,
+  handleDenySubmit,
   startArchiveCleanup,
 } = require("./tickets");
 
@@ -252,6 +254,9 @@ async function handleComponent(interaction) {
   }
   if (interaction.isModalSubmit() && interaction.customId === SUBMIT_MODAL_ID) {
     return handleSubmit(interaction);
+  }
+  if (interaction.isModalSubmit() && isTicketDenyModal(interaction.customId)) {
+    return handleDenySubmit(interaction);
   }
   if (interaction.isButton() && isTicketButton(interaction.customId)) {
     return handleTicketButton(interaction);

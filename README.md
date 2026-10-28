@@ -148,7 +148,7 @@ That's it. Pushes to `main` now deploy automatically (you can watch them in the 
 2. The bot looks the character up and decides:
    - **Everything checks out:** they get `Verified` and their nickname is set to the character name, after a short random wait.
    - **Level or gear score too low, with strict verification on (`STRICT_VERIFICATION=true`):** they're told they don't meet the server requirements, and why.
-   - **Discord account is too new, or the character's level or gear score is too low (strict verification off):** the bot opens a private ticket with the member and the officers. It asks for an in-game screenshot with a random gear piece taken off. An officer or moderator clicks **Verify** or **Ban**, and the ticket is archived.
+   - **Discord account is too new, or the character's level or gear score is too low (strict verification off):** the bot opens a private ticket with the member and the officers. It asks for an in-game screenshot with a random gear piece taken off. An officer or moderator clicks **Verify**, **Deny** or **Ban**, and the ticket is archived. **Deny** asks for a reason, then pings the member with "We cannot verify for now because <reason>. If this is your alt, please apply with your main." The member can still read the archived ticket but can't post in it.
    - **Wrong faction or server:** they're turned away.
    - **Typo or unknown name:** they're asked to try again.
    - **Anything unusual** (the name's already claimed by someone else, or the lookup site is down): it goes to the review channel with **Approve** and **Deny** buttons.

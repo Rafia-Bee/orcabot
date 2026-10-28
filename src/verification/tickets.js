@@ -5,8 +5,11 @@ const {
   ChannelType,
   EmbedBuilder,
   MessageFlags,
+  ModalBuilder,
   PermissionFlagsBits,
   SnowflakeUtil,
+  TextInputBuilder,
+  TextInputStyle,
   escapeMarkdown,
 } = require("discord.js");
 const { getConfig } = require("./config");
@@ -16,6 +19,8 @@ const { COLORS, buildEventEmbed, postLog } = require("./embeds");
 const { DAY_MS } = require("./rules");
 
 const PREFIX = "verify:ticket:";
+const DENY_MODAL_PREFIX = "verify:ticket-deny:";
+const DENY_REASON_INPUT_ID = "reason";
 const ARCHIVE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
 const SLOT_LABELS = {
@@ -67,6 +72,11 @@ function ticketButtons(ticketId, disabled = false) {
       .setCustomId(`${PREFIX}verify:${ticketId}`)
       .setLabel("Verify")
       .setStyle(ButtonStyle.Success)
+      .setDisabled(disabled),
+    new ButtonBuilder()
+      .setCustomId(`${PREFIX}deny:${ticketId}`)
+      .setLabel("Deny")
+      .setStyle(ButtonStyle.Secondary)
       .setDisabled(disabled),
     new ButtonBuilder()
       .setCustomId(`${PREFIX}ban:${ticketId}`)
@@ -182,7 +192,7 @@ async function askConfirmation(interaction, ticket, action) {
   });
 }
 
-async function archiveTicket(interaction, ticket, { color, title }) {
+async function archiveTicket(interaction, ticket, { color, title, memberCanRead = false }) {
   const cfg = getConfig();
   const problems = [];
   const channel = await interaction.guild.channels.fetch(ticket.channel_id).catch(() => null);
@@ -198,9 +208,14 @@ async function archiveTicket(interaction, ticket, { color, title }) {
       allowedMentions: { parse: [] },
     })
     .catch((error) => problems.push(`message: ${error.message}`));
-  await channel.permissionOverwrites
-    .delete(ticket.discord_id, "Ticket closed")
-    .catch((error) => problems.push(`member access: ${error.message}`));
+  const memberAccess = memberCanRead
+    ? channel.permissionOverwrites.edit(
+        ticket.discord_id,
+        { ViewChannel: true, ReadMessageHistory: true, SendMessages: false, AttachFiles: false },
+        { reason: "Ticket closed" }
+      )
+    : channel.permissionOverwrites.delete(ticket.discord_id, "Ticket closed");
+  await memberAccess.catch((error) => problems.push(`member access: ${error.message}`));
   await channel
     .setParent(cfg.archivedTicketsCategoryId, { lockPermissions: false, reason: "Ticket closed" })
     .catch((error) => problems.push(`archive: ${error.message}`));
@@ -215,15 +230,74 @@ async function closeTicketAsVerified(interaction, ticket) {
   });
 }
 
-async function logTicketResult(interaction, ticket, { color, title, problems }) {
+async function logTicketResult(interaction, ticket, { color, title, problems, reason }) {
   await postLog(
     interaction.client,
     buildEventEmbed({
       color: problems.length ? COLORS.yellow : color,
       title: `${title} (ticket #${ticket.id})`,
       description: `<@${ticket.discord_id}> (**${escapeMarkdown(ticket.char_name)}**) by <@${interaction.user.id}> in <#${ticket.channel_id}>`,
-      fields: problems.length ? [{ name: "Problems", value: problems.join("\n") }] : [],
+      fields: [
+        ...(reason ? [{ name: "Reason", value: reason }] : []),
+        ...(problems.length ? [{ name: "Problems", value: problems.join("\n") }] : []),
+      ],
     })
+  );
+}
+
+function buildDenyModal(ticket) {
+  return new ModalBuilder()
+    .setCustomId(`${DENY_MODAL_PREFIX}${ticket.id}`)
+    .setTitle(`Deny ${ticket.char_name}`.slice(0, 45))
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId(DENY_REASON_INPUT_ID)
+          .setLabel("We cannot verify for now because...")
+          .setPlaceholder("your gear score is below the minimum")
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(true)
+          .setMaxLength(500)
+      )
+    );
+}
+
+async function handleDenySubmit(interaction) {
+  if (!isStaff(interaction.member)) {
+    return interaction.reply({ content: "Only officers and moderators can do this.", flags: MessageFlags.Ephemeral });
+  }
+  const store = getStore();
+  const ticket = store.getTicket(Number(interaction.customId.slice(DENY_MODAL_PREFIX.length)));
+  if (!ticket) {
+    return interaction.reply({ content: "This ticket no longer exists.", flags: MessageFlags.Ephemeral });
+  }
+  if (!store.resolveTicket(ticket.id, "denied", interaction.user.id)) {
+    return interaction.reply({ content: "Another officer already handled this ticket.", flags: MessageFlags.Ephemeral });
+  }
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const reason = interaction.fields
+    .getTextInputValue(DENY_REASON_INPUT_ID)
+    .trim()
+    .replace(/[.!\s]+$/, "");
+  const problems = [];
+  const channel = await interaction.guild.channels.fetch(ticket.channel_id).catch(() => null);
+  if (channel) {
+    await channel
+      .send({
+        content: `<@${ticket.discord_id}> We cannot verify for now because ${reason}. If this is your alt, please apply with your main.`,
+        allowedMentions: { users: [ticket.discord_id] },
+      })
+      .catch((error) => problems.push(`denial message: ${error.message}`));
+  }
+
+  const result = { color: COLORS.grey, title: `Denied by ${interaction.user.tag}`, memberCanRead: true };
+  problems.push(...(await archiveTicket(interaction, ticket, result)));
+  await logTicketResult(interaction, ticket, { ...result, title: "Denied", problems, reason });
+  return interaction.editReply(
+    problems.length
+      ? `Denied, but: ${problems.join("; ")}`
+      : "Denied. The member was told why and the ticket has been archived."
   );
 }
 
@@ -298,6 +372,10 @@ function isTicketButton(customId) {
   return customId.startsWith(PREFIX);
 }
 
+function isTicketDenyModal(customId) {
+  return customId.startsWith(DENY_MODAL_PREFIX);
+}
+
 async function handleTicketButton(interaction) {
   const [action, rawId] = interaction.customId.slice(PREFIX.length).split(":");
   const fromConfirmation = action.startsWith("confirm-") || action === "cancel";
@@ -321,6 +399,7 @@ async function handleTicketButton(interaction) {
     return respond(`This ticket was already ${ticket.status} by <@${ticket.resolved_by}>.`);
   }
 
+  if (action === "deny") return interaction.showModal(buildDenyModal(ticket));
   if (action === "ban" || action === "verify") return askConfirmation(interaction, ticket, action);
   if (action === "confirm-ban") return confirmBan(interaction, ticket);
   if (action === "confirm-verify") return confirmVerify(interaction, ticket);
@@ -384,6 +463,8 @@ module.exports = {
   openTicket,
   isTicketButton,
   handleTicketButton,
+  isTicketDenyModal,
+  handleDenySubmit,
   slotLabel,
   startArchiveCleanup,
   closeTicketAsVerified,

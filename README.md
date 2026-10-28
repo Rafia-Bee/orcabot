@@ -6,7 +6,7 @@ A Discord bot for the Orca guild. It checks new members' AION 2 characters so on
 
 - [Node.js](https://nodejs.org) 22 or newer
 - A Discord bot (make one at the [Discord Developer Portal](https://discord.com/developers/applications))
-- A computer or server that stays on, because the bot only works while it's running
+- Somewhere for it to run 24/7. The bot only works while it's running. We use Fly.io, see [Hosting on Fly.io](#hosting-on-flyio).
 
 ## Setup
 
@@ -77,6 +77,66 @@ You should see `Logged in as ...`. Run `node deploy-commands.js` again whenever 
 ### 6. Post the Verify button
 
 Run `/verify-setup` in Discord. The bot posts the Verify message in your verify channel.
+
+## Hosting on Fly.io
+
+Fly.io keeps the bot running around the clock for about $2.34 a month (the smallest machine plus 1 GB of storage). The bot's settings (`.env`) and saved data live on that storage, so they survive restarts and updates.
+
+### First-time setup
+
+1. **Sign up** at [fly.io](https://fly.io) with your GitHub account and add a payment card.
+2. **Install the Fly tool** and log in:
+   - Windows (PowerShell): `iwr https://fly.io/install.ps1 -useb | iex`
+   - Mac/Linux: `curl -L https://fly.io/install.sh | sh`
+   - Then: `fly auth login`
+3. **Create the app** from the project folder:
+   ```bash
+   fly apps create orcabot
+   ```
+   If the name `orcabot` is taken, pick another one and change `app = "orcabot"` at the top of `fly.toml` to match.
+4. **Create the storage** (say yes if it warns about having only one volume):
+   ```bash
+   fly volumes create orcabot_data --region fra --size 1
+   ```
+5. **Deploy:**
+   ```bash
+   fly deploy
+   ```
+   The bot starts and waits for its settings.
+6. *(Optional)* **Bring your existing data along.** Stop the bot on your PC first, then:
+   ```bash
+   fly ssh sftp put data/orcabot.db /data/orcabot.db
+   ```
+7. **Upload your settings:**
+   ```bash
+   fly ssh sftp put .env /data/.env -m 0600
+   ```
+   Within 10 seconds the bot starts. Check with `fly logs`. You should see `Logged in as ...`.
+8. **Stop the bot on your PC.** If two copies run at once, members get double replies.
+
+### Automatic updates from GitHub
+
+Every push to `main` can test and deploy the bot by itself:
+
+1. Run `fly tokens create deploy` and copy the token.
+2. On GitHub, open the repo → **Settings → Secrets and variables → Actions → New repository secret**. Name it `FLY_API_TOKEN` and paste the token.
+
+That's it. Pushes to `main` now deploy automatically (you can watch them in the repo's **Actions** tab).
+
+### Day to day
+
+- **See what the bot is doing:** `fly logs`
+- **Restart it:** `fly apps restart orcabot`
+- **Change a setting that `/verify-config` can't:** the copy on Fly.io is the live one, since mods' `/verify-config` changes are saved there. So download it, edit it, and put it back:
+  ```bash
+  fly ssh sftp get /data/.env server.env
+  # edit server.env
+  fly ssh console -C "rm /data/.env"
+  fly ssh sftp put server.env /data/.env -m 0600
+  fly apps restart orcabot
+  ```
+  Delete `server.env` from your PC afterwards, since it contains the bot token.
+- **New or changed commands:** still run `node deploy-commands.js` from your PC.
 
 ## How verification works
 

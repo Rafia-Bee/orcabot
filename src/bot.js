@@ -6,7 +6,7 @@ const {
 } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config();
+require("dotenv").config({ path: process.env.ENV_FILE });
 
 const client = new Client({
   intents: [

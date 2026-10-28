@@ -1,0 +1,19 @@
+app = "orcabot"
+primary_region = "fra"
+swap_size_mb = 512
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ENV_FILE = "/data/.env"
+  VERIFY_DB_PATH = "/data/orcabot.db"
+  NODE_OPTIONS = "--max-old-space-size=192"
+
+[mounts]
+  source = "orcabot_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

@@ -136,7 +136,7 @@ function getConfig() {
   return cachedConfig;
 }
 
-const ENV_PATH = path.join(__dirname, "..", "..", ".env");
+const ENV_PATH = process.env.ENV_FILE || path.join(__dirname, "..", "..", ".env");
 
 const EDITABLE_SETTINGS = {
   STRICT_VERIFICATION: { label: "Strict verification", type: "bool" },

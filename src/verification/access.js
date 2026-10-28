@@ -199,6 +199,7 @@ function startGrantSweeper(client) {
 
 module.exports = {
   grantAccess,
+  applyCharacterRoles,
   revokeAccess,
   randomGrantDelayMs,
   startGrantSweeper,

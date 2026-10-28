@@ -9,7 +9,7 @@ const {
 } = require("discord.js");
 const { getConfig } = require("./config");
 const { getStore } = require("./store");
-const { grantAccess } = require("./access");
+const { grantAccess, revokeAccess } = require("./access");
 const {
   COLORS,
   reasonText,
@@ -22,15 +22,19 @@ const {
 const APPROVE_PREFIX = "verify:approve:";
 const DENY_PREFIX = "verify:deny:";
 
-function reviewButtons(caseId) {
+function isRecheckCase(reviewCase) {
+  return reviewCase.reason.startsWith("recheck_");
+}
+
+function reviewButtons(caseId, recheck = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`${APPROVE_PREFIX}${caseId}`)
-      .setLabel("Approve")
+      .setLabel(recheck ? "Keep verified" : "Approve")
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId(`${DENY_PREFIX}${caseId}`)
-      .setLabel("Deny")
+      .setLabel(recheck ? "Unverify" : "Deny")
       .setStyle(ButtonStyle.Danger)
   );
 }
@@ -74,7 +78,7 @@ async function openReviewCase(client, { discordId, charName, reason, character, 
   const reviewCase = store.createReviewCase({ discordId, charName, reason, character });
   const message = await postToChannel(client, getConfig().reviewChannelId, {
     embeds: [buildReviewEmbed(reviewCase, context)],
-    components: [reviewButtons(reviewCase.id)],
+    components: [reviewButtons(reviewCase.id, isRecheckCase(reviewCase))],
   });
   if (message) {
     store.setReviewMessage(reviewCase.id, message.channelId, message.id);
@@ -89,7 +93,57 @@ async function closeReviewMessage(interaction, { color, footer }) {
   await interaction.message.edit({ embeds: [embed], components: [] });
 }
 
+async function keepVerified(interaction, reviewCase) {
+  if (!getStore().resolveReviewCase(reviewCase.id, "approved", interaction.user.id)) {
+    return interaction.followUp({
+      content: "Another moderator already handled this case.",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  await closeReviewMessage(interaction, {
+    color: COLORS.green,
+    footer: `Kept verified by ${interaction.user.tag}`,
+  });
+  await postLog(
+    interaction.client,
+    buildEventEmbed({
+      color: COLORS.green,
+      title: `Kept verified (review #${reviewCase.id})`,
+      description: `<@${reviewCase.discord_id}> (**${escapeMarkdown(reviewCase.char_name ?? "?")}**), kept by <@${interaction.user.id}>`,
+    })
+  );
+}
+
+async function unverifyFromReview(interaction, reviewCase) {
+  const store = getStore();
+  if (!store.resolveReviewCase(reviewCase.id, "denied", interaction.user.id)) {
+    return interaction.followUp({
+      content: "Another moderator already handled this case.",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  store.deleteVerification(reviewCase.discord_id);
+  store.deleteScheduledGrant(reviewCase.discord_id);
+  const member = await interaction.guild.members.fetch(reviewCase.discord_id).catch(() => null);
+  const problems = member ? await revokeAccess(member) : [];
+
+  await closeReviewMessage(interaction, {
+    color: COLORS.red,
+    footer: `Unverified by ${interaction.user.tag}`,
+  });
+  await postLog(
+    interaction.client,
+    buildEventEmbed({
+      color: COLORS.red,
+      title: `Unverified by mod (review #${reviewCase.id})`,
+      description: `<@${reviewCase.discord_id}> (**${escapeMarkdown(reviewCase.char_name ?? "?")}**), unverified by <@${interaction.user.id}>`,
+      fields: problems.length ? [{ name: "Problems", value: problems.join("\n") }] : [],
+    })
+  );
+}
+
 async function approve(interaction, reviewCase) {
+  if (isRecheckCase(reviewCase)) return keepVerified(interaction, reviewCase);
   const store = getStore();
   const modId = interaction.user.id;
   const charName = reviewCase.character?.name ?? reviewCase.char_name;
@@ -155,6 +209,7 @@ async function approve(interaction, reviewCase) {
 }
 
 async function deny(interaction, reviewCase) {
+  if (isRecheckCase(reviewCase)) return unverifyFromReview(interaction, reviewCase);
   const modId = interaction.user.id;
   if (!getStore().resolveReviewCase(reviewCase.id, "denied", modId)) {
     return interaction.followUp({

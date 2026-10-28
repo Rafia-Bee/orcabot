@@ -30,6 +30,9 @@ const REASON_TEXT = {
   gear_score_too_low: "Gear score below minimum",
   account_has_other_claim: "This Discord account already claimed a different character",
   name_already_claimed: "Character already claimed by another Discord account",
+  recheck_not_found: "Re-check: character not found (renamed, transferred or deleted)",
+  recheck_wrong_faction: "Re-check: character is now a different faction",
+  recheck_wrong_server: "Re-check: character is now on a different server",
 };
 
 function reasonText(reason) {

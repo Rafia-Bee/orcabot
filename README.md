@@ -151,7 +151,7 @@ That's it. Pushes to `main` now deploy automatically (you can watch them in the 
    - **Wrong faction or server:** they're turned away.
    - **Typo or unknown name:** they're asked to try again.
    - **Anything unusual** (the name's already claimed by someone else, or the lookup site is down): it goes to the review channel with **Approve** and **Deny** buttons.
-3. Along with `Verified`, members get their legion's role (or Guest if their legion isn't in the alliance) and their class role, if `LEGION_ROLES` / `GUEST_ROLE_ID` / `CLASS_ROLES` are set. If someone changes legion or class, use `/verify-manual` on them again to swap the roles.
+3. Along with `Verified`, members get their legion's role (or Guest if their legion isn't in the alliance) and their class role, if `LEGION_ROLES` / `GUEST_ROLE_ID` / `CLASS_ROLES` are set. If someone changes legion or class, run `/recheck-members` (for them or everyone) to update the roles.
 4. Each character can only belong to one Discord account.
 5. Archived tickets are deleted after 7 days without messages.
 6. If a flood of Verify requests comes in at once (a raid), the bot pauses verification for a few minutes and warns the mods. Members are asked to try again shortly.
@@ -171,6 +171,7 @@ Members never see how the checks work. All the details go to the mods-only chann
 | `/verify-manual` | Verify someone by hand with their character name (also closes their open ticket or review case) | Manage Roles |
 | `/unverify` | Take away someone's Verified role, nickname and character | Manage Roles |
 | `/whois-char` | See who owns a character, or which character someone has | Manage Roles |
+| `/recheck-members` | Look up verified members' characters again: updates legion and class roles, and sends anyone renamed, transferred or on the wrong faction to the review channel. Pick a `user` to check one person, or leave it empty for everyone (runs in the background, results in the log channel). | Manage Roles |
 | `/verify-config` | See the settings, turn strict verification on or off, or change the min level, gear score, account age or how long archived tickets are kept | Manage Roles |
 
 ### Mod tools

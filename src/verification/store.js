@@ -118,6 +118,13 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
         reviewed_by = excluded.reviewed_by,
         created_at = excluded.created_at
     `),
+    allVerifications: db.prepare("SELECT * FROM verifications ORDER BY created_at"),
+    updateClaimDetails: db.prepare(`
+      UPDATE verifications SET
+        char_name = @char_name, char_name_lower = @char_name_lower, level = @level,
+        gear_score = @gear_score, combat_power = @combat_power, legion = @legion, class_name = @class_name
+      WHERE discord_id = @discord_id
+    `),
     deleteVerification: db.prepare(
       "DELETE FROM verifications WHERE discord_id = ?"
     ),
@@ -228,6 +235,23 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
 
     deleteVerification(discordId) {
       return stmt.deleteVerification.run(discordId).changes > 0;
+    },
+
+    getAllVerifications() {
+      return stmt.allVerifications.all();
+    },
+
+    updateClaimDetails(discordId, character) {
+      stmt.updateClaimDetails.run({
+        discord_id: discordId,
+        char_name: character.name,
+        char_name_lower: character.name.toLowerCase(),
+        level: character.level ?? null,
+        gear_score: character.gearScore ?? null,
+        combat_power: character.combatPower ?? null,
+        legion: character.legion ?? null,
+        class_name: character.className ?? null,
+      });
     },
 
     createReviewCase({ discordId, charName = null, reason, character = null }) {

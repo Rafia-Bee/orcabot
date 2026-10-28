@@ -82,6 +82,20 @@ test("faction and server are denied, low level or gear score gets a ticket", () 
   assert.equal(outcome({ lookup: found({ gearScore: null }) }), "ticket:gear_score_too_low");
 });
 
+test("strict verification denies low level or gear score instead of a ticket", () => {
+  const strict = { ...config, strictVerification: true };
+  assert.equal(outcome({ config: strict, lookup: found({ level: 44 }) }), "deny:level_too_low");
+  assert.equal(outcome({ config: strict, lookup: found({ gearScore: 2000 }) }), "deny:gear_score_too_low");
+  assert.equal(outcome({ config: strict }), "verify:passed");
+  assert.equal(outcome({ config: strict, accountAgeMs: DAY_MS }), "ticket:account_too_new");
+});
+
+test("both level and gear score too low are reported", () => {
+  const { details } = decide(input({ lookup: found({ level: 40, gearScore: 1000 }) }));
+  assert.equal(details.levelTooLow, true);
+  assert.equal(details.gearScoreTooLow, true);
+});
+
 test("claims", () => {
   assert.equal(
     outcome({ charClaim: { discord_id: "2", char_name: "dieyoung" } }),

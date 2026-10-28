@@ -83,12 +83,14 @@ Run `/verify-setup` in Discord. The bot posts the Verify message in your verify 
 1. A new member clicks **Verify** and types their in-game character name.
 2. The bot looks the character up and decides:
    - **Everything checks out:** they get `Verified` and their nickname is set to the character name, after a short random wait.
-   - **Discord account is too new, or the character's level or gear score is too low:** the bot opens a private ticket with the member and the officers. It asks for an in-game screenshot with a random gear piece taken off. An officer clicks **Verify** or **Ban**, and the ticket is archived.
+   - **Level or gear score too low, with strict verification on (`STRICT_VERIFICATION=true`):** they're told they don't meet the server requirements, and why.
+   - **Discord account is too new, or the character's level or gear score is too low (strict verification off):** the bot opens a private ticket with the member and the officers. It asks for an in-game screenshot with a random gear piece taken off. An officer clicks **Verify** or **Ban**, and the ticket is archived.
    - **Wrong faction or server:** they're turned away.
    - **Typo or unknown name:** they're asked to try again.
    - **Anything unusual** (the name's already claimed by someone else, or the lookup site is down): it goes to the review channel with **Approve** and **Deny** buttons.
 3. Each character can only belong to one Discord account.
 4. Archived tickets are deleted after 7 days without messages.
+5. If a flood of Verify requests comes in at once (a raid), the bot pauses verification for a few minutes and warns the mods. Members are asked to try again shortly.
 
 Members never see how the checks work. All the details go to the mods-only channels.
 
@@ -105,7 +107,7 @@ Members never see how the checks work. All the details go to the mods-only chann
 | `/verify-manual` | Verify someone by hand with their character name (also closes their open ticket or review case) | Manage Roles |
 | `/unverify` | Take away someone's Verified role, nickname and character | Manage Roles |
 | `/whois-char` | See who owns a character, or which character someone has | Manage Roles |
-| `/verify-config` | See the settings, or change the min level, gear score, account age or how long archived tickets are kept | Manage Roles |
+| `/verify-config` | See the settings, turn strict verification on or off, or change the min level, gear score, account age or how long archived tickets are kept | Manage Roles |
 
 ### Mod tools
 

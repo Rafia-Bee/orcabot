@@ -45,24 +45,22 @@ function decide({ lookup, accountAgeMs, charClaim, ownClaim, discordId, config }
     };
   }
 
-  let statsReason = null;
-  if (character.level < config.minLevel) {
-    statsReason = "level_too_low";
-  } else if (character.gearScore == null || character.gearScore < config.minGearScore) {
-    statsReason = "gear_score_too_low";
-  }
-  const statsDetails = {
-    level: character.level,
-    minLevel: config.minLevel,
-    gearScore: character.gearScore,
-    minGearScore: config.minGearScore,
-  };
+  const levelTooLow = character.level < config.minLevel;
+  const gearScoreTooLow = character.gearScore == null || character.gearScore < config.minGearScore;
 
-  if (statsReason) {
+  if (levelTooLow || gearScoreTooLow) {
     return {
-      outcome: accountTooNew ? OUTCOMES.DENY : OUTCOMES.TICKET,
-      reason: statsReason,
-      details: { ...statsDetails, accountAgeDays },
+      outcome: accountTooNew || config.strictVerification ? OUTCOMES.DENY : OUTCOMES.TICKET,
+      reason: levelTooLow ? "level_too_low" : "gear_score_too_low",
+      details: {
+        levelTooLow,
+        gearScoreTooLow,
+        level: character.level,
+        minLevel: config.minLevel,
+        gearScore: character.gearScore,
+        minGearScore: config.minGearScore,
+        accountAgeDays,
+      },
     };
   }
   if (accountTooNew) {

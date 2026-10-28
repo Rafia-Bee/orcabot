@@ -13,6 +13,7 @@ const {
 const { getConfig } = require("./config");
 const { getStore } = require("./store");
 const { lookupCharacter } = require("./shugo");
+const { recordSubmission } = require("./raid");
 const { decide, OUTCOMES, DAY_MS } = require("./rules");
 const {
   COLORS,
@@ -80,7 +81,7 @@ function buildNameModal() {
     );
 }
 
-function memberMessage(outcome, reason, name, ticketChannelId) {
+function memberMessage(outcome, reason, name, ticketChannelId, details) {
   const cfg = getConfig();
   const safeName = escapeMarkdown(name);
   if (ticketChannelId) {
@@ -99,10 +100,10 @@ function memberMessage(outcome, reason, name, ticketChannelId) {
     if (reason === "wrong_faction" || reason === "wrong_server") {
       return `**${safeName}** isn't eligible. This server is for ${cfg.requiredFaction} on ${cfg.requiredServer} only.`;
     }
-    return (
-      `**${safeName}** doesn't meet the requirements yet ` +
-      `(Level ${cfg.minLevel}+, gear score ${cfg.minGearScore}+). Submit again once it does.`
-    );
+    const reasons = [];
+    if (details?.levelTooLow) reasons.push(`Level too low (minimum ${cfg.minLevel})`);
+    if (details?.gearScoreTooLow) reasons.push(`Gear score too low (minimum ${cfg.minGearScore})`);
+    return `You don't meet the server requirements.\nReason: ${reasons.join(", ")}.`;
   }
   return `Thanks! Your request for **${safeName}** has been received. A moderator will verify you shortly.`;
 }
@@ -154,6 +155,11 @@ async function handleSubmit(interaction) {
   if (cooldownMs > 0) {
     return interaction.editReply(
       `Please wait ${Math.ceil(cooldownMs / 1000)} seconds before trying again.`
+    );
+  }
+  if (recordSubmission(interaction.client)) {
+    return interaction.editReply(
+      "We're getting a lot of verification requests right now. Please try again in a few minutes."
     );
   }
   store.setCooldown(userId, cfg.submitCooldownSeconds * 1000);
@@ -237,7 +243,7 @@ async function handleSubmit(interaction) {
     await postLog(interaction.client, logEmbed);
   }
 
-  return interaction.editReply(memberMessage(outcome, reason, displayName, ticketChannelId));
+  return interaction.editReply(memberMessage(outcome, reason, displayName, ticketChannelId, decision.details));
 }
 
 async function handleComponent(interaction) {

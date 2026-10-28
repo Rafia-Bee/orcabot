@@ -29,6 +29,15 @@ function requiredFromEnv(missing) {
       }
       return parsed;
     },
+    bool: (key) => {
+      const value = raw(key);
+      if (value === null) return null;
+      const lower = value.toLowerCase();
+      if (lower !== "true" && lower !== "false") {
+        throw new Error(`${key} must be true or false, got "${value}"`);
+      }
+      return lower === "true";
+    },
     list: (key) => {
       const value = raw(key);
       if (value === null) return null;
@@ -51,6 +60,7 @@ function loadConfig() {
     ticketGearSlots: env.list("TICKET_GEAR_SLOTS"),
     maxNameLength: env.int("MAX_CHARACTER_NAME_LENGTH"),
     archivedTicketRetentionDays: env.int("ARCHIVED_TICKET_RETENTION_DAYS"),
+    strictVerification: env.bool("STRICT_VERIFICATION"),
   };
   const shugo = {
     baseUrl: env.string("SHUGO_BASE_URL")?.replace(/\/+$/, ""),
@@ -78,6 +88,10 @@ function loadConfig() {
     );
   }
 
+  for (const key of ["RAID_SUBMISSIONS_THRESHOLD", "RAID_WINDOW_SECONDS", "RAID_PAUSE_MINUTES"]) {
+    if (intFromEnv(key, 1) < 1) throw new Error(`${key} must be at least 1`);
+  }
+
   return {
     mode,
     grantDelayMinSeconds,
@@ -92,6 +106,11 @@ function loadConfig() {
     ...requirements,
     shugo,
     submitCooldownSeconds: intFromEnv("VERIFY_COOLDOWN_SECONDS", 60),
+    raid: {
+      submissionsThreshold: intFromEnv("RAID_SUBMISSIONS_THRESHOLD", 20),
+      windowSeconds: intFromEnv("RAID_WINDOW_SECONDS", 60),
+      pauseMinutes: intFromEnv("RAID_PAUSE_MINUTES", 10),
+    },
   };
 }
 
@@ -120,6 +139,7 @@ function getConfig() {
 const ENV_PATH = path.join(__dirname, "..", "..", ".env");
 
 const EDITABLE_SETTINGS = {
+  STRICT_VERIFICATION: { label: "Strict verification", type: "bool" },
   MIN_LEVEL: { label: "Min level", min: 1, max: 100, unit: "" },
   MIN_GS: { label: "Min gear score", min: 0, max: 100000, unit: "" },
   MIN_ACCOUNT_AGE_DAYS: { label: "Min account age", min: 0, max: 3650, unit: " days" },
@@ -129,7 +149,9 @@ const EDITABLE_SETTINGS = {
 function updateSetting(key, value) {
   const setting = EDITABLE_SETTINGS[key];
   if (!setting) throw new Error(`${key} can't be changed from Discord`);
-  if (!Number.isInteger(value) || value < setting.min || value > setting.max) {
+  if (setting.type === "bool") {
+    if (typeof value !== "boolean") throw new Error(`${setting.label} must be true or false`);
+  } else if (!Number.isInteger(value) || value < setting.min || value > setting.max) {
     throw new Error(`${setting.label} must be a whole number from ${setting.min} to ${setting.max}`);
   }
 

@@ -245,6 +245,22 @@ async function logTicketResult(interaction, ticket, { color, title, problems, re
   );
 }
 
+function defaultDenyReason(ticket) {
+  const cfg = getConfig();
+  const c = ticket.character ?? {};
+  const reasons = [];
+  if (c.level != null && c.level < cfg.minLevel) {
+    reasons.push(`your level is below the minimum (${cfg.minLevel})`);
+  }
+  if (c.gearScore == null || c.gearScore < cfg.minGearScore) {
+    reasons.push(`your gear score is below the minimum (${cfg.minGearScore})`);
+  }
+  if (reasons.length === 0 || ticket.reason === "account_too_new") {
+    reasons.push(`your Discord account is newer than ${cfg.minAccountAgeDays} days`);
+  }
+  return reasons.join(" and ");
+}
+
 function buildDenyModal(ticket) {
   return new ModalBuilder()
     .setCustomId(`${DENY_MODAL_PREFIX}${ticket.id}`)
@@ -254,7 +270,7 @@ function buildDenyModal(ticket) {
         new TextInputBuilder()
           .setCustomId(DENY_REASON_INPUT_ID)
           .setLabel("We cannot verify for now because...")
-          .setPlaceholder("your gear score is below the minimum")
+          .setValue(defaultDenyReason(ticket))
           .setStyle(TextInputStyle.Paragraph)
           .setRequired(true)
           .setMaxLength(500)

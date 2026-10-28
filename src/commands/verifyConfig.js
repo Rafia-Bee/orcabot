@@ -68,6 +68,7 @@ function buildSettingsEmbed() {
       },
       { name: "Verified role", value: role(cfg.verifiedRoleId), inline: true },
       { name: "Officers role", value: role(cfg.officersRoleId), inline: true },
+      { name: "Moderator role", value: cfg.moderatorRoleId ? role(cfg.moderatorRoleId) : "not set", inline: true },
       { name: "Verify channel", value: channel(cfg.verifyChannelId), inline: true },
       { name: "Log channel", value: channel(cfg.logChannelId), inline: true },
       { name: "Review channel", value: channel(cfg.reviewChannelId), inline: true },

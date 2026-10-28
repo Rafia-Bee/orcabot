@@ -45,6 +45,7 @@ You'll need:
 | `BOT_OWNER_ID` | Your own user ID (lets you use `/stfu`) |
 | `VERIFIED_ROLE_ID` | The role that unlocks the server |
 | `OFFICERS_ROLE_ID` | The role that handles review tickets |
+| `MODERATOR_ROLE_ID` | *(optional)* A second staff role that can also handle tickets and the review channel |
 | `LEGION_ROLES` | *(optional)* Your alliance legions and their roles, like `Aegis:<role id>,SDC:<role id>`. The names must match shugo.gg. |
 | `GUEST_ROLE_ID` | *(optional)* The role for verified members who aren't in one of those legions |
 | `CLASS_ROLES` | *(optional)* Class roles, like `Ranger:<role id>,Chanter:<role id>` (Gladiator, Templar, Assassin, Ranger, Sorcerer, Spiritmaster, Cleric, Chanter) |
@@ -147,7 +148,7 @@ That's it. Pushes to `main` now deploy automatically (you can watch them in the 
 2. The bot looks the character up and decides:
    - **Everything checks out:** they get `Verified` and their nickname is set to the character name, after a short random wait.
    - **Level or gear score too low, with strict verification on (`STRICT_VERIFICATION=true`):** they're told they don't meet the server requirements, and why.
-   - **Discord account is too new, or the character's level or gear score is too low (strict verification off):** the bot opens a private ticket with the member and the officers. It asks for an in-game screenshot with a random gear piece taken off. An officer clicks **Verify** or **Ban**, and the ticket is archived.
+   - **Discord account is too new, or the character's level or gear score is too low (strict verification off):** the bot opens a private ticket with the member and the officers. It asks for an in-game screenshot with a random gear piece taken off. An officer or moderator clicks **Verify** or **Ban**, and the ticket is archived.
    - **Wrong faction or server:** they're turned away.
    - **Typo or unknown name:** they're asked to try again.
    - **Anything unusual** (the name's already claimed by someone else, or the lookup site is down): it goes to the review channel with **Approve** and **Deny** buttons.

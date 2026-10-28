@@ -126,6 +126,7 @@ function loadConfig() {
     logChannelId: process.env.VERIFY_LOG_CHANNEL_ID,
     reviewChannelId: process.env.VERIFY_REVIEW_CHANNEL_ID,
     officersRoleId: process.env.OFFICERS_ROLE_ID,
+    moderatorRoleId: process.env.MODERATOR_ROLE_ID?.trim() || null,
     ticketsCategoryId: process.env.REVIEW_TICKETS_CATEGORY_ID,
     archivedTicketsCategoryId: process.env.ARCHIVED_REVIEW_TICKETS_CATEGORY_ID,
     legionRoles: parseLegionRoles(process.env.LEGION_ROLES),

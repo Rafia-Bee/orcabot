@@ -10,6 +10,7 @@ const {
 const { getConfig } = require("./config");
 const { getStore } = require("./store");
 const { grantAccess, revokeAccess } = require("./access");
+const { isStaff } = require("./tickets");
 const {
   COLORS,
   reasonText,
@@ -236,9 +237,12 @@ function isReviewButton(customId) {
 }
 
 async function handleReviewButton(interaction) {
-  if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
+  if (
+    !isStaff(interaction.member) &&
+    !interaction.member.permissions.has(PermissionsBitField.Flags.ManageRoles)
+  ) {
     return interaction.reply({
-      content: "You need the Manage Roles permission to review verifications.",
+      content: "Only officers, moderators or members with Manage Roles can review verifications.",
       flags: MessageFlags.Ephemeral,
     });
   }

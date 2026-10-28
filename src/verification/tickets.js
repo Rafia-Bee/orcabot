@@ -133,6 +133,7 @@ async function openTicket(interaction, { character, reason }) {
         { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
         { id: interaction.user.id, allow: participant },
         { id: cfg.officersRoleId, allow: participant },
+        ...(cfg.moderatorRoleId ? [{ id: cfg.moderatorRoleId, allow: participant }] : []),
         {
           id: interaction.client.user.id,
           allow: [...participant, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ManageChannels],
@@ -149,9 +150,11 @@ async function openTicket(interaction, { character, reason }) {
   }
 }
 
-function isOfficer(member) {
+function isStaff(member) {
+  const cfg = getConfig();
   return (
-    member.roles.cache.has(getConfig().officersRoleId) ||
+    member.roles.cache.has(cfg.officersRoleId) ||
+    (cfg.moderatorRoleId !== null && member.roles.cache.has(cfg.moderatorRoleId)) ||
     member.permissions.has(PermissionFlagsBits.Administrator)
   );
 }
@@ -303,8 +306,8 @@ async function handleTicketButton(interaction) {
       ? interaction.update({ content, components: [] })
       : interaction.reply({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
 
-  if (!isOfficer(interaction.member)) {
-    return respond("Only officers can do this.");
+  if (!isStaff(interaction.member)) {
+    return respond("Only officers and moderators can do this.");
   }
   if (action === "cancel") {
     return respond("Cancelled.");
@@ -384,4 +387,5 @@ module.exports = {
   slotLabel,
   startArchiveCleanup,
   closeTicketAsVerified,
+  isStaff,
 };

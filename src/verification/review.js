@@ -38,7 +38,7 @@ function reviewButtons(caseId) {
 function buildReviewEmbed(reviewCase, { accountAgeDays, lookupError, details } = {}) {
   const embed = new EmbedBuilder()
     .setColor(COLORS.yellow)
-    .setTitle(`🕵️ Review #${reviewCase.id}: ${reasonText(reviewCase.reason)}`)
+    .setTitle(`Review #${reviewCase.id}: ${reasonText(reviewCase.reason)}`)
     .setDescription(
       `<@${reviewCase.discord_id}> submitted **${escapeMarkdown(reviewCase.char_name ?? "?")}**`
     )
@@ -137,7 +137,7 @@ async function approve(interaction, reviewCase) {
     interaction.client,
     buildEventEmbed({
       color: problems.length ? COLORS.yellow : COLORS.green,
-      title: `✅ Approved by mod (review #${reviewCase.id})`,
+      title: `Approved by mod (review #${reviewCase.id})`,
       description: `<@${member.id}> as **${escapeMarkdown(charName)}**, approved by <@${modId}>`,
       fields: problems.length ? [{ name: "Problems", value: problems.join("\n") }] : [],
     })
@@ -166,7 +166,7 @@ async function deny(interaction, reviewCase) {
     interaction.client,
     buildEventEmbed({
       color: COLORS.red,
-      title: `⛔ Denied by mod (review #${reviewCase.id})`,
+      title: `Denied by mod (review #${reviewCase.id})`,
       description: `<@${reviewCase.discord_id}> (**${escapeMarkdown(reviewCase.char_name ?? "?")}**), denied by <@${modId}>`,
     })
   );

@@ -53,47 +53,40 @@ test("verification claims", async (t) => {
   });
 });
 
-test("gear challenges", async (t) => {
+test("tickets", async (t) => {
   const store = openStore(":memory:");
   t.after(() => store.close());
 
-  const baseline = { Belt: { id: 215230001, name: "Noble Belt" } };
-
-  await t.test("create, read back, count attempts", () => {
-    const challenge = store.createChallenge({
+  await t.test("create, attach channel, find open ticket", () => {
+    const ticket = store.createTicket({
       discordId: "1",
-      charName: "dieyoung",
+      guildId: "g",
+      character: character("dieyoung"),
+      reason: "account_too_new",
       slot: "Belt",
-      baseline,
-      ttlMs: 15 * 60_000,
     });
-    assert.deepEqual(challenge.baseline, baseline);
-    assert.equal(challenge.expires_at - challenge.issued_at, 15 * 60_000);
-    assert.equal(store.getChallengeForUser("1").id, challenge.id);
-    assert.equal(store.recordChallengeAttempt(challenge.id), 1);
-    assert.equal(store.recordChallengeAttempt(challenge.id), 2);
+    assert.equal(ticket.status, "open");
+    assert.equal(ticket.char_name, "dieyoung");
+    assert.equal(ticket.character.gearScore, 2500);
+    store.setTicketChannel(ticket.id, "chan", "msg");
+    assert.equal(store.getOpenTicket("1").channel_id, "chan");
   });
 
-  await t.test("a new challenge replaces the old one and resets attempts", () => {
-    const old = store.getChallengeForUser("1");
-    const fresh = store.createChallenge({
-      discordId: "1",
-      charName: "dieyoung",
-      slot: "Belt",
-      baseline,
-      ttlMs: 1,
-      reviewCaseId: 7,
-    });
-    assert.equal(fresh.id, old.id);
-    assert.equal(fresh.attempts, 0);
-    assert.equal(fresh.review_case_id, 7);
+  await t.test("resolve once, reopen after a failed action", () => {
+    const { id } = store.getOpenTicket("1");
+    assert.equal(store.resolveTicket(id, "banned", "officer1"), true);
+    assert.equal(store.resolveTicket(id, "verified", "officer2"), false);
+    assert.equal(store.getOpenTicket("1"), null);
+
+    store.reopenTicket(id);
+    assert.equal(store.getOpenTicket("1").id, id);
+    assert.equal(store.getTicket(id).resolved_by, null);
   });
 
-  await t.test("expired challenges are listed and can be deleted", () => {
-    const [expired] = store.getExpiredChallenges(Date.now() + 10);
-    assert.equal(expired.discord_id, "1");
-    assert.equal(store.deleteChallenge(expired.id), true);
-    assert.equal(store.getChallengeForUser("1"), null);
+  await t.test("delete", () => {
+    const { id } = store.getOpenTicket("1");
+    store.deleteTicket(id);
+    assert.equal(store.getTicket(id), null);
   });
 });
 

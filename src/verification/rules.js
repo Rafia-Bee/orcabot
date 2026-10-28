@@ -2,7 +2,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const OUTCOMES = {
   VERIFY: "verify",
-  CHALLENGE: "challenge",
+  TICKET: "ticket",
   REVIEW: "review",
   DENY: "deny",
   RETRY: "retry",
@@ -17,19 +17,13 @@ function decide({ lookup, accountAgeMs, charClaim, ownClaim, discordId, config }
   }
 
   const accountAgeDays = Math.floor(accountAgeMs / DAY_MS);
-  if (accountAgeDays < config.minAccountAgeDays) {
-    return {
-      outcome: OUTCOMES.REVIEW,
-      reason: "account_too_new",
-      details: { accountAgeDays, minAccountAgeDays: config.minAccountAgeDays },
-    };
-  }
+  const accountTooNew = accountAgeDays < config.minAccountAgeDays;
 
   if (lookup.status !== "found") {
     return {
       outcome: OUTCOMES.REVIEW,
       reason: "shugo_unavailable",
-      details: { error: lookup.reason },
+      details: { error: lookup.reason, accountAgeDays },
     };
   }
 
@@ -50,18 +44,32 @@ function decide({ lookup, accountAgeMs, charClaim, ownClaim, discordId, config }
       details: { server: character.server },
     };
   }
+
+  let statsReason = null;
   if (character.level < config.minLevel) {
+    statsReason = "level_too_low";
+  } else if (character.gearScore == null || character.gearScore < config.minGearScore) {
+    statsReason = "gear_score_too_low";
+  }
+  const statsDetails = {
+    level: character.level,
+    minLevel: config.minLevel,
+    gearScore: character.gearScore,
+    minGearScore: config.minGearScore,
+  };
+
+  if (statsReason) {
     return {
-      outcome: OUTCOMES.DENY,
-      reason: "level_too_low",
-      details: { level: character.level, minLevel: config.minLevel },
+      outcome: accountTooNew ? OUTCOMES.DENY : OUTCOMES.TICKET,
+      reason: statsReason,
+      details: { ...statsDetails, accountAgeDays },
     };
   }
-  if (character.gearScore == null || character.gearScore < config.minGearScore) {
+  if (accountTooNew) {
     return {
-      outcome: OUTCOMES.DENY,
-      reason: "gear_score_too_low",
-      details: { gearScore: character.gearScore, minGearScore: config.minGearScore },
+      outcome: OUTCOMES.TICKET,
+      reason: "account_too_new",
+      details: { accountAgeDays, minAccountAgeDays: config.minAccountAgeDays },
     };
   }
 
@@ -72,17 +80,12 @@ function decide({ lookup, accountAgeMs, charClaim, ownClaim, discordId, config }
       details: { claimedCharacter: ownClaim.char_name },
     };
   }
-
   if (charClaim && charClaim.discord_id !== discordId) {
     return {
-      outcome: OUTCOMES.CHALLENGE,
+      outcome: OUTCOMES.REVIEW,
       reason: "name_already_claimed",
       details: { claimedBy: charClaim.discord_id },
     };
-  }
-
-  if (config.gearCheck === "always") {
-    return { outcome: OUTCOMES.CHALLENGE, reason: "gear_check_always" };
   }
 
   return { outcome: OUTCOMES.VERIFY, reason: "passed" };

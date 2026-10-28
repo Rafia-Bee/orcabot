@@ -8,7 +8,6 @@ const config = {
   minLevel: 45,
   minGearScore: 2100,
   minAccountAgeDays: 90,
-  gearCheck: "risky_only",
 };
 
 const found = (extra = {}) => ({
@@ -50,13 +49,16 @@ test("bad input asks the member to retry, even for young accounts", () => {
   );
 });
 
-test("young accounts go to review regardless of character", () => {
-  assert.equal(outcome({ accountAgeMs: 89 * DAY_MS }), "review:account_too_new");
+test("young account with a valid character gets a ticket", () => {
+  assert.equal(outcome({ accountAgeMs: 89 * DAY_MS }), "ticket:account_too_new");
   assert.equal(outcome({ accountAgeMs: 90 * DAY_MS }), "verify:passed");
-  assert.equal(
-    outcome({ accountAgeMs: DAY_MS, lookup: found({ faction: "Elyos" }) }),
-    "review:account_too_new"
-  );
+});
+
+test("young account with a weak or wrong character is denied", () => {
+  const young = { accountAgeMs: DAY_MS };
+  assert.equal(outcome({ ...young, lookup: found({ level: 44 }) }), "deny:level_too_low");
+  assert.equal(outcome({ ...young, lookup: found({ gearScore: 2000 }) }), "deny:gear_score_too_low");
+  assert.equal(outcome({ ...young, lookup: found({ faction: "Elyos" }) }), "deny:wrong_faction");
 });
 
 test("site trouble goes to review, never deny", () => {
@@ -64,22 +66,26 @@ test("site trouble goes to review, never deny", () => {
     outcome({ lookup: { status: "unavailable", reason: "http 500" } }),
     "review:shugo_unavailable"
   );
+  assert.equal(
+    outcome({ lookup: { status: "unavailable", reason: "http 500" }, accountAgeMs: DAY_MS }),
+    "review:shugo_unavailable"
+  );
 });
 
-test("faction, server, level and gear score rules", () => {
+test("faction and server are denied, low level or gear score gets a ticket", () => {
   assert.equal(outcome({ lookup: found({ faction: "Elyos" }) }), "deny:wrong_faction");
   assert.equal(outcome({ lookup: found({ faction: "asmodians" }) }), "verify:passed");
   assert.equal(outcome({ lookup: found({ server: "Lumiel" }) }), "deny:wrong_server");
-  assert.equal(outcome({ lookup: found({ level: 44 }) }), "deny:level_too_low");
-  assert.equal(outcome({ lookup: found({ gearScore: 2099 }) }), "deny:gear_score_too_low");
+  assert.equal(outcome({ lookup: found({ level: 44 }) }), "ticket:level_too_low");
+  assert.equal(outcome({ lookup: found({ gearScore: 2099 }) }), "ticket:gear_score_too_low");
   assert.equal(outcome({ lookup: found({ gearScore: 2100 }) }), "verify:passed");
-  assert.equal(outcome({ lookup: found({ gearScore: null }) }), "deny:gear_score_too_low");
+  assert.equal(outcome({ lookup: found({ gearScore: null }) }), "ticket:gear_score_too_low");
 });
 
 test("claims", () => {
   assert.equal(
     outcome({ charClaim: { discord_id: "2", char_name: "dieyoung" } }),
-    "challenge:name_already_claimed"
+    "review:name_already_claimed"
   );
   assert.equal(
     outcome({
@@ -91,12 +97,5 @@ test("claims", () => {
   assert.equal(
     outcome({ ownClaim: { discord_id: "1", char_name: "SomeoneElse" } }),
     "review:account_has_other_claim"
-  );
-});
-
-test("GEAR_CHECK=always challenges clean passes", () => {
-  assert.equal(
-    outcome({ config: { ...config, gearCheck: "always" } }),
-    "challenge:gear_check_always"
   );
 });

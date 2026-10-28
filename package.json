@@ -5,6 +5,8 @@
   "main": "src/bot.js",
   "scripts": {
     "start": "node src/bot.js",
+    "dev": "node scripts/dev.js",
+    "db:reset": "node -e \"for (const s of ['', '-wal', '-shm']) require('fs').rmSync('data/orcabot.db' + s, { force: true })\"",
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {

@@ -14,9 +14,10 @@ const { getConfig } = require("./config");
 const { getStore } = require("./store");
 const { lookupCharacter } = require("./shugo");
 const { decide, OUTCOMES, DAY_MS } = require("./rules");
-const { buildSubmissionEmbed, postLog, unixSeconds } = require("./embeds");
+const { buildSubmissionEmbed, postLog, postToChannel, unixSeconds } = require("./embeds");
 const { randomGrantDelayMs, startGrantSweeper } = require("./access");
 const { openReviewCase, isReviewButton, handleReviewButton } = require("./review");
+const { openTicket, isTicketButton, handleTicketButton } = require("./tickets");
 
 const CUSTOM_ID_PREFIX = "verify";
 const OPEN_BUTTON_ID = "verify:open";
@@ -67,9 +68,12 @@ function buildNameModal() {
     );
 }
 
-function memberMessage(outcome, reason, name) {
+function memberMessage(outcome, reason, name, ticketChannelId) {
   const cfg = getConfig();
   const safeName = escapeMarkdown(name);
+  if (ticketChannelId) {
+    return `Thanks! An officer needs to confirm **${safeName}** before you're verified. Please continue in <#${ticketChannelId}>.`;
+  }
   if (reason === "invalid_name") {
     return "That doesn't look like a valid character name. Check it and try again.";
   }
@@ -123,6 +127,12 @@ async function handleSubmit(interaction) {
   if (interaction.member.roles.cache.has(cfg.verifiedRoleId)) {
     return interaction.editReply("You're already verified.");
   }
+  const openTicketForUser = store.getOpenTicket(userId);
+  if (openTicketForUser) {
+    return interaction.editReply(
+      `Your request is being reviewed by an officer. Please continue in <#${openTicketForUser.channel_id}>.`
+    );
+  }
   if (store.getScheduledGrant(userId) || store.getOpenReviewCase(userId)) {
     return interaction.editReply(
       "Your request has already been received. A moderator will verify you shortly."
@@ -154,6 +164,7 @@ async function handleSubmit(interaction) {
   let outcome = decision.outcome;
   let reason = decision.reason;
   const logFields = [];
+  let ticketChannelId = null;
 
   if (cfg.mode === "live") {
     if (outcome === OUTCOMES.VERIFY) {
@@ -171,7 +182,17 @@ async function handleSubmit(interaction) {
       }
     }
 
-    if (outcome === OUTCOMES.CHALLENGE) outcome = OUTCOMES.REVIEW;
+    if (outcome === OUTCOMES.TICKET) {
+      try {
+        const ticket = await openTicket(interaction, { character, reason });
+        ticketChannelId = ticket.channel_id;
+        logFields.push({ name: "Ticket", value: `<#${ticket.channel_id}> (#${ticket.id})`, inline: true });
+      } catch (error) {
+        console.error("Failed to open verification ticket:", error);
+        outcome = OUTCOMES.REVIEW;
+        logFields.push({ name: "Ticket failed", value: error.message.slice(0, 1000) });
+      }
+    }
 
     if (outcome === OUTCOMES.REVIEW) {
       const reviewCase = await openReviewCase(interaction.client, {
@@ -198,9 +219,13 @@ async function handleSubmit(interaction) {
     accountAgeMs,
   });
   if (logFields.length) logEmbed.addFields(logFields);
-  await postLog(interaction.client, logEmbed);
+  if (ticketChannelId) {
+    await postToChannel(interaction.client, cfg.reviewChannelId, { embeds: [logEmbed] });
+  } else {
+    await postLog(interaction.client, logEmbed);
+  }
 
-  return interaction.editReply(memberMessage(outcome, reason, displayName));
+  return interaction.editReply(memberMessage(outcome, reason, displayName, ticketChannelId));
 }
 
 async function handleComponent(interaction) {
@@ -209,6 +234,9 @@ async function handleComponent(interaction) {
   }
   if (interaction.isModalSubmit() && interaction.customId === SUBMIT_MODAL_ID) {
     return handleSubmit(interaction);
+  }
+  if (interaction.isButton() && isTicketButton(interaction.customId)) {
+    return handleTicketButton(interaction);
   }
   if (interaction.isButton() && isReviewButton(interaction.customId)) {
     return handleReviewButton(interaction);

@@ -47,7 +47,7 @@ async function processGrant(client, grant) {
       client,
       buildEventEmbed({
         color: COLORS.grey,
-        title: "👋 Left before role was granted",
+        title: "Left before role was granted",
         description: `<@${grant.discord_id}> (**${escapeMarkdown(grant.char_name)}**) is no longer in the server. Their claim is kept.`,
       })
     );
@@ -60,7 +60,7 @@ async function processGrant(client, grant) {
       client,
       buildEventEmbed({
         color: roleGranted ? COLORS.yellow : COLORS.red,
-        title: roleGranted ? "⚠ Verified with problems" : "❌ Couldn't grant Verified role",
+        title: roleGranted ? "Verified with problems" : "Couldn't grant Verified role",
         description: `<@${member.id}> (**${escapeMarkdown(grant.char_name)}**)`,
         fields: [{ name: "Problems", value: problems.join("\n") }],
       })

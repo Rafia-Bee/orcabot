@@ -45,7 +45,7 @@ function loadConfig() {
     minLevel: env.int("MIN_LEVEL"),
     minGearScore: env.int("MIN_GS"),
     minAccountAgeDays: env.int("MIN_ACCOUNT_AGE_DAYS"),
-    challengeSlots: env.list("CHALLENGE_SLOTS"),
+    ticketGearSlots: env.list("TICKET_GEAR_SLOTS"),
     maxNameLength: env.int("MAX_CHARACTER_NAME_LENGTH"),
   };
   const shugo = {
@@ -64,10 +64,6 @@ function loadConfig() {
   if (!["shadow", "live"].includes(mode)) {
     throw new Error(`VERIFY_MODE must be "shadow" or "live", got "${mode}"`);
   }
-  const gearCheck = (process.env.GEAR_CHECK || "risky_only").trim();
-  if (!["risky_only", "always"].includes(gearCheck)) {
-    throw new Error(`GEAR_CHECK must be "risky_only" or "always", got "${gearCheck}"`);
-  }
 
   const grantDelayMinSeconds = intFromEnv("VERIFY_GRANT_DELAY_MIN_SECONDS", 60);
   const grantDelayMaxSeconds = intFromEnv("VERIFY_GRANT_DELAY_MAX_SECONDS", 300);
@@ -85,10 +81,11 @@ function loadConfig() {
     verifyChannelId: process.env.VERIFY_CHANNEL_ID,
     logChannelId: process.env.VERIFY_LOG_CHANNEL_ID,
     reviewChannelId: process.env.VERIFY_REVIEW_CHANNEL_ID,
+    officersRoleId: process.env.OFFICERS_ROLE_ID,
+    ticketsCategoryId: process.env.REVIEW_TICKETS_CATEGORY_ID,
+    archivedTicketsCategoryId: process.env.ARCHIVED_REVIEW_TICKETS_CATEGORY_ID,
     ...requirements,
     shugo,
-    gearCheck,
-    challengeTtlMinutes: intFromEnv("CHALLENGE_TTL_MINUTES", 15),
     submitCooldownSeconds: intFromEnv("VERIFY_COOLDOWN_SECONDS", 60),
   };
 }
@@ -99,6 +96,9 @@ function missingKeys(config) {
     VERIFY_CHANNEL_ID: config.verifyChannelId,
     VERIFY_LOG_CHANNEL_ID: config.logChannelId,
     VERIFY_REVIEW_CHANNEL_ID: config.reviewChannelId,
+    OFFICERS_ROLE_ID: config.officersRoleId,
+    REVIEW_TICKETS_CATEGORY_ID: config.ticketsCategoryId,
+    ARCHIVED_REVIEW_TICKETS_CATEGORY_ID: config.archivedTicketsCategoryId,
   };
   return Object.entries(required)
     .filter(([, value]) => !value)

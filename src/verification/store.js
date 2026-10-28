@@ -17,17 +17,7 @@ CREATE TABLE IF NOT EXISTS verifications (
   created_at       INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS pending_challenges (
-  id               INTEGER PRIMARY KEY AUTOINCREMENT,
-  discord_id       TEXT NOT NULL UNIQUE,
-  char_name        TEXT NOT NULL,
-  slot             TEXT NOT NULL,
-  baseline_json    TEXT NOT NULL,
-  issued_at        INTEGER NOT NULL,
-  expires_at       INTEGER NOT NULL,
-  attempts         INTEGER NOT NULL DEFAULT 0,
-  review_case_id   INTEGER
-);
+DROP TABLE IF EXISTS pending_challenges;
 
 CREATE TABLE IF NOT EXISTS review_cases (
   id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,6 +34,24 @@ CREATE TABLE IF NOT EXISTS review_cases (
 );
 CREATE INDEX IF NOT EXISTS review_cases_open
   ON review_cases (discord_id) WHERE status = 'open';
+
+CREATE TABLE IF NOT EXISTS tickets (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  discord_id       TEXT NOT NULL,
+  guild_id         TEXT NOT NULL,
+  char_name        TEXT NOT NULL,
+  character_json   TEXT,
+  reason           TEXT NOT NULL,
+  slot             TEXT NOT NULL,
+  channel_id       TEXT,
+  message_id       TEXT,
+  status           TEXT NOT NULL DEFAULT 'open',
+  resolved_by      TEXT,
+  created_at       INTEGER NOT NULL,
+  resolved_at      INTEGER
+);
+CREATE INDEX IF NOT EXISTS tickets_open
+  ON tickets (discord_id) WHERE status = 'open';
 
 CREATE TABLE IF NOT EXISTS scheduled_grants (
   discord_id       TEXT PRIMARY KEY,
@@ -62,13 +70,7 @@ function parseJson(text) {
   return text == null ? null : JSON.parse(text);
 }
 
-function rowToChallenge(row) {
-  if (!row) return null;
-  const { baseline_json, ...rest } = row;
-  return { ...rest, baseline: parseJson(baseline_json) };
-}
-
-function rowToReviewCase(row) {
+function rowWithCharacter(row) {
   if (!row) return null;
   const { character_json, ...rest } = row;
   return { ...rest, character: parseJson(character_json) };
@@ -110,33 +112,6 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
       "DELETE FROM verifications WHERE discord_id = ?"
     ),
 
-    insertChallenge: db.prepare(`
-      INSERT INTO pending_challenges
-        (discord_id, char_name, slot, baseline_json, issued_at, expires_at, review_case_id)
-      VALUES
-        (@discord_id, @char_name, @slot, @baseline_json, @issued_at, @expires_at, @review_case_id)
-      ON CONFLICT (discord_id) DO UPDATE SET
-        char_name = excluded.char_name,
-        slot = excluded.slot,
-        baseline_json = excluded.baseline_json,
-        issued_at = excluded.issued_at,
-        expires_at = excluded.expires_at,
-        attempts = 0,
-        review_case_id = excluded.review_case_id
-      RETURNING *
-    `),
-    challengeById: db.prepare("SELECT * FROM pending_challenges WHERE id = ?"),
-    challengeByDiscordId: db.prepare(
-      "SELECT * FROM pending_challenges WHERE discord_id = ?"
-    ),
-    incrementChallengeAttempts: db.prepare(
-      "UPDATE pending_challenges SET attempts = attempts + 1 WHERE id = ? RETURNING attempts"
-    ),
-    deleteChallenge: db.prepare("DELETE FROM pending_challenges WHERE id = ?"),
-    expiredChallenges: db.prepare(
-      "SELECT * FROM pending_challenges WHERE expires_at <= ?"
-    ),
-
     insertReviewCase: db.prepare(`
       INSERT INTO review_cases (discord_id, char_name, reason, character_json, created_at)
       VALUES (@discord_id, @char_name, @reason, @character_json, @created_at)
@@ -153,6 +128,29 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
       UPDATE review_cases SET status = ?, resolved_by = ?, resolved_at = ?
       WHERE id = ? AND status = 'open'
     `),
+
+    insertTicket: db.prepare(`
+      INSERT INTO tickets
+        (discord_id, guild_id, char_name, character_json, reason, slot, created_at)
+      VALUES
+        (@discord_id, @guild_id, @char_name, @character_json, @reason, @slot, @created_at)
+      RETURNING *
+    `),
+    ticketById: db.prepare("SELECT * FROM tickets WHERE id = ?"),
+    openTicketByDiscordId: db.prepare(
+      "SELECT * FROM tickets WHERE discord_id = ? AND status = 'open' ORDER BY id DESC LIMIT 1"
+    ),
+    setTicketChannel: db.prepare(
+      "UPDATE tickets SET channel_id = ?, message_id = ? WHERE id = ?"
+    ),
+    resolveTicket: db.prepare(`
+      UPDATE tickets SET status = ?, resolved_by = ?, resolved_at = ?
+      WHERE id = ? AND status = 'open'
+    `),
+    reopenTicket: db.prepare(
+      "UPDATE tickets SET status = 'open', resolved_by = NULL, resolved_at = NULL WHERE id = ?"
+    ),
+    deleteTicket: db.prepare("DELETE FROM tickets WHERE id = ?"),
 
     upsertScheduledGrant: db.prepare(`
       INSERT INTO scheduled_grants (discord_id, guild_id, char_name, due_at)
@@ -220,43 +218,8 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
       return stmt.deleteVerification.run(discordId).changes > 0;
     },
 
-    createChallenge({ discordId, charName, slot, baseline, ttlMs, reviewCaseId = null }) {
-      const issuedAt = Date.now();
-      return rowToChallenge(
-        stmt.insertChallenge.get({
-          discord_id: discordId,
-          char_name: charName,
-          slot,
-          baseline_json: JSON.stringify(baseline),
-          issued_at: issuedAt,
-          expires_at: issuedAt + ttlMs,
-          review_case_id: reviewCaseId,
-        })
-      );
-    },
-
-    getChallenge(id) {
-      return rowToChallenge(stmt.challengeById.get(id));
-    },
-
-    getChallengeForUser(discordId) {
-      return rowToChallenge(stmt.challengeByDiscordId.get(discordId));
-    },
-
-    recordChallengeAttempt(id) {
-      return stmt.incrementChallengeAttempts.get(id)?.attempts ?? null;
-    },
-
-    deleteChallenge(id) {
-      return stmt.deleteChallenge.run(id).changes > 0;
-    },
-
-    getExpiredChallenges(now = Date.now()) {
-      return stmt.expiredChallenges.all(now).map(rowToChallenge);
-    },
-
     createReviewCase({ discordId, charName = null, reason, character = null }) {
-      return rowToReviewCase(
+      return rowWithCharacter(
         stmt.insertReviewCase.get({
           discord_id: discordId,
           char_name: charName,
@@ -268,11 +231,11 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
     },
 
     getReviewCase(id) {
-      return rowToReviewCase(stmt.reviewCaseById.get(id));
+      return rowWithCharacter(stmt.reviewCaseById.get(id));
     },
 
     getOpenReviewCase(discordId) {
-      return rowToReviewCase(stmt.openReviewCaseByDiscordId.get(discordId));
+      return rowWithCharacter(stmt.openReviewCaseByDiscordId.get(discordId));
     },
 
     setReviewMessage(id, channelId, messageId) {
@@ -281,6 +244,44 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
 
     resolveReviewCase(id, status, resolvedBy) {
       return stmt.resolveReviewCase.run(status, resolvedBy, Date.now(), id).changes > 0;
+    },
+
+    createTicket({ discordId, guildId, character, reason, slot }) {
+      return rowWithCharacter(
+        stmt.insertTicket.get({
+          discord_id: discordId,
+          guild_id: guildId,
+          char_name: character.name,
+          character_json: JSON.stringify(character),
+          reason,
+          slot,
+          created_at: Date.now(),
+        })
+      );
+    },
+
+    getTicket(id) {
+      return rowWithCharacter(stmt.ticketById.get(id));
+    },
+
+    getOpenTicket(discordId) {
+      return rowWithCharacter(stmt.openTicketByDiscordId.get(discordId));
+    },
+
+    setTicketChannel(id, channelId, messageId) {
+      stmt.setTicketChannel.run(channelId, messageId, id);
+    },
+
+    resolveTicket(id, status, resolvedBy) {
+      return stmt.resolveTicket.run(status, resolvedBy, Date.now(), id).changes > 0;
+    },
+
+    reopenTicket(id) {
+      stmt.reopenTicket.run(id);
+    },
+
+    deleteTicket(id) {
+      stmt.deleteTicket.run(id);
     },
 
     scheduleGrant({ discordId, guildId, charName, dueAt }) {

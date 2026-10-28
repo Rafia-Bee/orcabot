@@ -11,26 +11,11 @@ const COLORS = {
 };
 
 const OUTCOME_STYLE = {
-  [OUTCOMES.VERIFY]: { would: "verify", done: "Verified", emoji: "✅", color: COLORS.green },
-  [OUTCOMES.CHALLENGE]: {
-    would: "send a gear challenge",
-    done: "Gear challenge sent",
-    emoji: "🧪",
-    color: COLORS.blue,
-  },
-  [OUTCOMES.REVIEW]: {
-    would: "send to mod review",
-    done: "Sent to mod review",
-    emoji: "🕵️",
-    color: COLORS.yellow,
-  },
-  [OUTCOMES.DENY]: { would: "deny", done: "Denied", emoji: "⛔", color: COLORS.red },
-  [OUTCOMES.RETRY]: {
-    would: "ask the member to retry",
-    done: "Asked to retry",
-    emoji: "↩️",
-    color: COLORS.grey,
-  },
+  [OUTCOMES.VERIFY]: { would: "verify", done: "Verified", color: COLORS.green },
+  [OUTCOMES.TICKET]: { would: "open a review ticket", done: "Review ticket opened", color: COLORS.blue },
+  [OUTCOMES.REVIEW]: { would: "send to mod review", done: "Sent to mod review", color: COLORS.yellow },
+  [OUTCOMES.DENY]: { would: "deny", done: "Denied", color: COLORS.red },
+  [OUTCOMES.RETRY]: { would: "ask the member to retry", done: "Asked to retry", color: COLORS.grey },
 };
 
 const REASON_TEXT = {
@@ -45,7 +30,6 @@ const REASON_TEXT = {
   gear_score_too_low: "Gear score below minimum",
   account_has_other_claim: "This Discord account already claimed a different character",
   name_already_claimed: "Character already claimed by another Discord account",
-  gear_check_always: "Gear check required for everyone (GEAR_CHECK=always)",
 };
 
 function reasonText(reason) {
@@ -73,13 +57,13 @@ function buildSubmissionEmbed({ user, submittedName, lookup, decision, outcome, 
   const cfg = getConfig();
   const style = OUTCOME_STYLE[outcome];
   const accountAgeDays = Math.floor(accountAgeMs / DAY_MS);
-  const ageWarning = accountAgeDays < cfg.minAccountAgeDays ? " ⚠" : "";
+  const ageWarning = accountAgeDays < cfg.minAccountAgeDays ? " (below minimum)" : "";
   const title =
     cfg.mode === "shadow" ? `[Shadow] Would ${style.would}` : style.done;
 
   const embed = new EmbedBuilder()
     .setColor(style.color)
-    .setTitle(`${style.emoji} ${title}`)
+    .setTitle(title)
     .setDescription(`<@${user.id}> submitted **${escapeMarkdown(submittedName)}**`)
     .addFields(
       { name: "Reason", value: reasonText(decision.reason) },

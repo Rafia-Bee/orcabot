@@ -6,14 +6,17 @@ const {
   EmbedBuilder,
   MessageFlags,
   PermissionFlagsBits,
+  SnowflakeUtil,
   escapeMarkdown,
 } = require("discord.js");
 const { getConfig } = require("./config");
 const { getStore } = require("./store");
 const { grantAccess } = require("./access");
 const { COLORS, buildEventEmbed, postLog } = require("./embeds");
+const { DAY_MS } = require("./rules");
 
 const PREFIX = "verify:ticket:";
+const ARCHIVE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
 const SLOT_LABELS = {
   MainHand: "your main-hand weapon",
@@ -201,6 +204,14 @@ async function archiveTicket(interaction, ticket, { color, title }) {
   return problems;
 }
 
+async function closeTicketAsVerified(interaction, ticket) {
+  if (!getStore().resolveTicket(ticket.id, "verified", interaction.user.id)) return null;
+  return archiveTicket(interaction, ticket, {
+    color: COLORS.green,
+    title: `Verified by ${interaction.user.tag}`,
+  });
+}
+
 async function logTicketResult(interaction, ticket, { color, title, problems }) {
   await postLog(
     interaction.client,
@@ -312,4 +323,65 @@ async function handleTicketButton(interaction) {
   if (action === "confirm-verify") return confirmVerify(interaction, ticket);
 }
 
-module.exports = { openTicket, isTicketButton, handleTicketButton, slotLabel };
+async function deleteExpiredArchivedTickets(client) {
+  const cfg = getConfig();
+  const category = await client.channels.fetch(cfg.archivedTicketsCategoryId).catch(() => null);
+  if (!category || category.type !== ChannelType.GuildCategory) return;
+
+  const cutoff = Date.now() - cfg.archivedTicketRetentionDays * DAY_MS;
+  const deleted = [];
+  const failed = [];
+  for (const channel of category.children.cache.values()) {
+    if (channel.type !== ChannelType.GuildText || !channel.name.startsWith("verify-")) continue;
+    const lastActivity = channel.lastMessageId
+      ? SnowflakeUtil.timestampFrom(channel.lastMessageId)
+      : channel.createdTimestamp;
+    if (lastActivity > cutoff) continue;
+    try {
+      await channel.delete(`Archived ticket inactive for ${cfg.archivedTicketRetentionDays} days`);
+      deleted.push(channel.name);
+    } catch (error) {
+      failed.push(`${channel.name}: ${error.message}`);
+    }
+  }
+
+  if (deleted.length === 0 && failed.length === 0) return;
+  const fields = [];
+  if (deleted.length) fields.push({ name: "Deleted", value: deleted.join("\n").slice(0, 1024) });
+  if (failed.length) fields.push({ name: "Failed", value: failed.join("\n").slice(0, 1024) });
+  await postLog(
+    client,
+    buildEventEmbed({
+      color: failed.length ? COLORS.yellow : COLORS.grey,
+      title: "Archived tickets cleaned up",
+      description: `Deleted ${deleted.length} archived ticket channel(s) with no messages for ${cfg.archivedTicketRetentionDays}+ days.`,
+      fields,
+    })
+  );
+}
+
+function startArchiveCleanup(client) {
+  let running = false;
+  const run = async () => {
+    if (running) return;
+    running = true;
+    try {
+      await deleteExpiredArchivedTickets(client);
+    } catch (error) {
+      console.error("Archive cleanup error:", error);
+    } finally {
+      running = false;
+    }
+  };
+  run();
+  return setInterval(run, ARCHIVE_CLEANUP_INTERVAL_MS);
+}
+
+module.exports = {
+  openTicket,
+  isTicketButton,
+  handleTicketButton,
+  slotLabel,
+  startArchiveCleanup,
+  closeTicketAsVerified,
+};

@@ -1,3 +1,6 @@
+const fs = require("fs");
+const path = require("path");
+
 function intFromEnv(key, fallback) {
   const raw = process.env[key];
   if (raw === undefined || raw.trim() === "") return fallback;
@@ -47,6 +50,7 @@ function loadConfig() {
     minAccountAgeDays: env.int("MIN_ACCOUNT_AGE_DAYS"),
     ticketGearSlots: env.list("TICKET_GEAR_SLOTS"),
     maxNameLength: env.int("MAX_CHARACTER_NAME_LENGTH"),
+    archivedTicketRetentionDays: env.int("ARCHIVED_TICKET_RETENTION_DAYS"),
   };
   const shugo = {
     baseUrl: env.string("SHUGO_BASE_URL")?.replace(/\/+$/, ""),
@@ -112,4 +116,33 @@ function getConfig() {
   return cachedConfig;
 }
 
-module.exports = { loadConfig, getConfig, missingKeys };
+const ENV_PATH = path.join(__dirname, "..", "..", ".env");
+
+const EDITABLE_SETTINGS = {
+  MIN_LEVEL: { label: "Min level", min: 1, max: 100, unit: "" },
+  MIN_GS: { label: "Min gear score", min: 0, max: 100000, unit: "" },
+  MIN_ACCOUNT_AGE_DAYS: { label: "Min account age", min: 0, max: 3650, unit: " days" },
+  ARCHIVED_TICKET_RETENTION_DAYS: { label: "Archived tickets kept", min: 1, max: 365, unit: " days" },
+};
+
+function updateSetting(key, value) {
+  const setting = EDITABLE_SETTINGS[key];
+  if (!setting) throw new Error(`${key} can't be changed from Discord`);
+  if (!Number.isInteger(value) || value < setting.min || value > setting.max) {
+    throw new Error(`${setting.label} must be a whole number from ${setting.min} to ${setting.max}`);
+  }
+
+  const previous = process.env[key];
+  const text = fs.readFileSync(ENV_PATH, "utf8");
+  const line = new RegExp(`^${key}=.*$`, "m");
+  const updated = line.test(text)
+    ? text.replace(line, `${key}=${value}`)
+    : `${text.replace(/\s*$/, "")}\n${key}=${value}\n`;
+  fs.writeFileSync(ENV_PATH, updated);
+
+  process.env[key] = String(value);
+  cachedConfig = null;
+  return { previous, current: String(value) };
+}
+
+module.exports = { loadConfig, getConfig, missingKeys, EDITABLE_SETTINGS, updateSetting };

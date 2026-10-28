@@ -28,6 +28,29 @@ async function grantAccess(member, charName) {
   return { roleGranted: !problems.some((p) => p.startsWith("role")), problems };
 }
 
+async function revokeAccess(member) {
+  const cfg = getConfig();
+  const problems = [];
+
+  if (member.roles.cache.has(cfg.verifiedRoleId)) {
+    try {
+      await member.roles.remove(cfg.verifiedRoleId, "Unverified");
+    } catch (error) {
+      problems.push(`role: ${error.message}`);
+    }
+  }
+
+  if (member.nickname && member.id !== member.guild.ownerId && member.manageable) {
+    try {
+      await member.setNickname(null, "Unverified");
+    } catch (error) {
+      problems.push(`nickname: ${error.message}`);
+    }
+  }
+
+  return problems;
+}
+
 function randomGrantDelayMs() {
   const { grantDelayMinSeconds: min, grantDelayMaxSeconds: max } = getConfig();
   return (min + Math.random() * (max - min)) * 1000;
@@ -87,4 +110,4 @@ function startGrantSweeper(client) {
   return setInterval(sweep, SWEEP_INTERVAL_MS);
 }
 
-module.exports = { grantAccess, randomGrantDelayMs, startGrantSweeper };
+module.exports = { grantAccess, revokeAccess, randomGrantDelayMs, startGrantSweeper };

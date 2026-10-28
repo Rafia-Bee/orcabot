@@ -17,7 +17,12 @@ const { decide, OUTCOMES, DAY_MS } = require("./rules");
 const { buildSubmissionEmbed, postLog, postToChannel, unixSeconds } = require("./embeds");
 const { randomGrantDelayMs, startGrantSweeper } = require("./access");
 const { openReviewCase, isReviewButton, handleReviewButton } = require("./review");
-const { openTicket, isTicketButton, handleTicketButton } = require("./tickets");
+const {
+  openTicket,
+  isTicketButton,
+  handleTicketButton,
+  startArchiveCleanup,
+} = require("./tickets");
 
 const CUSTOM_ID_PREFIX = "verify";
 const OPEN_BUTTON_ID = "verify:open";
@@ -247,10 +252,12 @@ function onReady(client) {
   const cfg = getConfig();
   console.log(`Verification mode: ${cfg.mode}`);
   startGrantSweeper(client);
+  startArchiveCleanup(client);
 }
 
 module.exports = {
   CUSTOM_ID_PREFIX,
+  OPEN_BUTTON_ID,
   buildVerifyPanel,
   handleComponent,
   onReady,

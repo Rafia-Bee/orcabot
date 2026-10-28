@@ -59,6 +59,7 @@ function loadConfig() {
     requestTimeoutMs: env.int("SHUGO_REQUEST_TIMEOUT_MS"),
     minRequestGapMs: env.int("SHUGO_MIN_REQUEST_GAP_MS"),
     cacheTtlMs: env.int("SHUGO_CACHE_TTL_MS"),
+    healthcheckCharacter: process.env.SHUGO_HEALTHCHECK_CHARACTER?.trim() || null,
   };
   if (missing.length > 0) {
     throw new Error(`Missing verification settings in .env: ${missing.join(", ")}`);

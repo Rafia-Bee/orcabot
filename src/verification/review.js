@@ -204,4 +204,25 @@ async function handleReviewButton(interaction) {
   return isApprove ? approve(interaction, reviewCase) : deny(interaction, reviewCase);
 }
 
-module.exports = { openReviewCase, isReviewButton, handleReviewButton };
+async function closeReviewCaseAsApproved(interaction, reviewCase) {
+  if (!getStore().resolveReviewCase(reviewCase.id, "approved", interaction.user.id)) return null;
+  if (!reviewCase.channel_id || !reviewCase.message_id) return [];
+  try {
+    const channel = await interaction.client.channels.fetch(reviewCase.channel_id);
+    const message = await channel.messages.fetch(reviewCase.message_id);
+    const embed = EmbedBuilder.from(message.embeds[0])
+      .setColor(COLORS.green)
+      .setFooter({ text: `Approved by ${interaction.user.tag} with /verify-manual` });
+    await message.edit({ embeds: [embed], components: [] });
+    return [];
+  } catch (error) {
+    return [`review message: ${error.message}`];
+  }
+}
+
+module.exports = {
+  openReviewCase,
+  isReviewButton,
+  handleReviewButton,
+  closeReviewCaseAsApproved,
+};

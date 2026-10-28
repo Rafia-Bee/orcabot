@@ -14,7 +14,14 @@ const { getConfig } = require("./config");
 const { getStore } = require("./store");
 const { lookupCharacter } = require("./shugo");
 const { decide, OUTCOMES, DAY_MS } = require("./rules");
-const { buildSubmissionEmbed, postLog, postToChannel, unixSeconds } = require("./embeds");
+const {
+  COLORS,
+  buildEventEmbed,
+  buildSubmissionEmbed,
+  postLog,
+  postToChannel,
+  unixSeconds,
+} = require("./embeds");
 const { randomGrantDelayMs, startGrantSweeper } = require("./access");
 const { openReviewCase, isReviewButton, handleReviewButton } = require("./review");
 const {
@@ -248,11 +255,84 @@ async function handleComponent(interaction) {
   }
 }
 
+const COOLDOWN_PRUNE_INTERVAL_MS = 60 * 60 * 1000;
+
+function shugoProblem(name, lookup) {
+  const cfg = getConfig();
+  if (lookup.status === "invalid_name") {
+    return `SHUGO_HEALTHCHECK_CHARACTER ("${name}") isn't a valid character name.`;
+  }
+  if (lookup.status === "not_found") {
+    return (
+      `**${escapeMarkdown(name)}** wasn't found. If the character was renamed or deleted, ` +
+      "set SHUGO_HEALTHCHECK_CHARACTER to another one. Otherwise check SHUGO_BASE_URL and SHUGO_REGION_PATH."
+    );
+  }
+  if (lookup.status !== "found") {
+    return `The lookup failed: ${lookup.reason}.`;
+  }
+  const c = lookup.character;
+  const missing = ["name", "level", "faction", "server", "gearScore"].filter((key) => c[key] == null);
+  if (Object.keys(c.equipment).length === 0) missing.push("equipment");
+  if (missing.length) {
+    return `The page loaded but is missing: ${missing.join(", ")}. shugo.gg may have changed its page layout.`;
+  }
+  if (c.faction !== cfg.requiredFaction || c.server !== cfg.requiredServer) {
+    return (
+      `**${escapeMarkdown(c.name)}** shows as ${c.faction} on ${c.server}, but the bot requires ` +
+      `${cfg.requiredFaction} on ${cfg.requiredServer}. Check REQUIRED_FACTION, REQUIRED_SERVER and SHUGO_REGION_PATH.`
+    );
+  }
+  return null;
+}
+
+async function checkShugo(client) {
+  const name = getConfig().shugo.healthcheckCharacter;
+  if (!name) {
+    console.warn("SHUGO_HEALTHCHECK_CHARACTER isn't set, skipping the startup shugo.gg check");
+    return;
+  }
+
+  const lookup = await lookupCharacter(name, { fresh: true });
+  const problem = shugoProblem(name, lookup);
+  if (!problem) {
+    const c = lookup.character;
+    console.log(`shugo.gg check OK: ${c.name}, level ${c.level}, gear score ${c.gearScore}`);
+    return;
+  }
+
+  console.warn(`shugo.gg check failed: ${problem}`);
+  await postLog(
+    client,
+    buildEventEmbed({
+      color: COLORS.red,
+      title: "shugo.gg check failed on startup",
+      description:
+        `${problem}\n\nUntil this is fixed, verification may not work correctly. ` +
+        "Check a few new submissions in the log channel.",
+    })
+  );
+}
+
+function startCooldownPruning() {
+  const prune = () => {
+    try {
+      getStore().pruneCooldowns();
+    } catch (error) {
+      console.error("Cooldown pruning error:", error);
+    }
+  };
+  prune();
+  return setInterval(prune, COOLDOWN_PRUNE_INTERVAL_MS);
+}
+
 function onReady(client) {
   const cfg = getConfig();
   console.log(`Verification mode: ${cfg.mode}`);
   startGrantSweeper(client);
   startArchiveCleanup(client);
+  startCooldownPruning();
+  checkShugo(client).catch((error) => console.error("shugo.gg check error:", error));
 }
 
 module.exports = {

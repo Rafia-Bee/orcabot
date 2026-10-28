@@ -1,198 +1,146 @@
 # OrcaBot
 
-OrcaBot is a Discord bot for the Orca guild, providing moderation and utility features.
+A Discord bot for the Orca guild. It checks new members' AION 2 characters so only our faction gets into the server, and it has a handful of mod tools for roles, channels and cleanup.
 
-## Features
+## What you need
 
-- Unban all users banned from the server with a single command
-- Mass kick users by role
-- Purge messages
-- Rename roles
-- Give roles by role (from up to 10 source roles)
-- Give a role to every member, built for large servers
-- Remove a role from members who have none of a set of roles
-- Move channels into a category
-- Show member stats for each role
+- [Node.js](https://nodejs.org) 22 or newer
+- A Discord bot (make one at the [Discord Developer Portal](https://discord.com/developers/applications))
+- A computer or server that stays on, because the bot only works while it's running
 
-## Prerequisites
+## Setup
 
-- Node.js (version 14 or higher)
-- A Discord bot token
+### 1. Download and install
 
-## Installation
+```bash
+git clone <repository-url>
+cd orcabot
+npm install
+```
 
-1. Clone the repository:
+### 2. Set up the bot on Discord
 
-   ```bash
-   git clone <repository-url>
-   ```
+In the [Developer Portal](https://discord.com/developers/applications), open your bot:
 
-2. Navigate to the project directory:
+1. **Bot** tab: turn on **Server Members Intent** and save.
+2. **OAuth2 → URL Generator**: tick `bot` and `applications.commands`, then tick these permissions (or just **Administrator**):
+   - Manage Roles, Manage Nicknames, Manage Channels, Manage Messages
+   - Kick Members, Ban Members
+   - View Channels, Send Messages, Read Message History, Attach Files, Embed Links
+3. Open the link it gives you, pick your server, and click **Authorize**.
 
-   ```bash
-   cd orcabot
-   ```
+### 3. Fill in the settings
 
-3. Install the dependencies:
+Copy `.env.example` to a new file called `.env` and fill in the blanks. Every line has a comment explaining what it's for.
 
-   ```bash
-   npm install
-   ```
+To copy IDs, turn on **Developer Mode** in Discord (**User Settings → Advanced**), then right-click a server, channel, category, role or user and pick **Copy ID**.
 
-## Configuration
+You'll need:
 
-1. Create a `.env` file in the root directory.
-2. Add your Discord bot token and IDs to the `.env` file:
+| Setting | What it is |
+| --- | --- |
+| `BOT_TOKEN` | Developer Portal → **Bot** → **Reset Token**. Keep it secret. |
+| `CLIENT_ID` | Developer Portal → **General Information** → **Application ID** |
+| `GUILD_ID` | Your server's ID |
+| `BOT_OWNER_ID` | Your own user ID (lets you use `/stfu`) |
+| `VERIFIED_ROLE_ID` | The role that unlocks the server |
+| `OFFICERS_ROLE_ID` | The role that handles review tickets |
+| `VERIFY_CHANNEL_ID` | Where new members click **Verify** |
+| `VERIFY_LOG_CHANNEL_ID` | Mods-only log of everything the bot does |
+| `VERIFY_REVIEW_CHANNEL_ID` | Mods-only channel for cases that need a human |
+| `REVIEW_TICKETS_CATEGORY_ID` | Category for open review tickets |
+| `ARCHIVED_REVIEW_TICKETS_CATEGORY_ID` | Category closed tickets get moved to |
 
-   ```env
-   BOT_TOKEN=your-bot-token-here
-   CLIENT_ID=your-bot-client-id-here
-   GUILD_ID=your-server-id-here
-   BOT_OWNER_ID=your-discord-user-id-here
-   ```
+The rest (faction, server, level and gear score requirements, and so on) already have sensible values. It's worth setting `SHUGO_HEALTHCHECK_CHARACTER` to your own character: the bot looks it up on startup and warns you in the log channel if character lookups stop working.
 
-**Do not commit your `.env` file to version control.**
+Never share your `.env` file. It's already left out of git.
 
-| Variable       | Where to find it                                                                                   |
-| -------------- | -------------------------------------------------------------------------------------------------- |
-| `BOT_TOKEN`    | Developer Portal → your application → **Bot** → **Reset Token**                                    |
-| `CLIENT_ID`    | Developer Portal → your application → **General Information** → **Application ID**                |
-| `GUILD_ID`     | Discord (Developer Mode on) → right-click the server icon → **Copy Server ID**                    |
-| `BOT_OWNER_ID` | Discord (Developer Mode on) → right-click your own name → **Copy User ID**                         |
+### 4. Set up your server
 
-To enable Developer Mode: Discord **User Settings → Advanced → Developer Mode**.
+- **Channels:** make the verify channel, the log and review channels, and the two ticket categories (open and archived).
+- **Who sees what:**
+  - The verify channel: everyone can see it, but `Verified` can't.
+  - The log and review channels: mods only.
+  - The ticket categories: officers only. The bot handles the rest.
+  - Everything else in the server: `Verified` only.
+- **Role order:** in **Server Settings → Roles**, drag the bot's role **above** `Verified` and any other role it should hand out. The bot can't change roles or nicknames for anyone at or above its own role.
 
-## Adding the Bot to a New Server
-
-The slash commands are registered to **one server at a time** (the one in `GUILD_ID`), so each new server needs the steps below.
-
-### 1. Enable the required intents
-
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications) and open your application.
-2. Open the **Bot** tab.
-3. Under **Privileged Gateway Intents**, turn on **Server Members Intent** (the bot uses `GuildMembers`).
-4. Click **Save Changes**.
-
-### 2. Generate the invite link
-
-1. In the Developer Portal, open **OAuth2 → URL Generator**.
-2. Under **Scopes**, tick `bot` and `applications.commands`.
-3. Under **Bot Permissions**, tick:
-   - Manage Roles
-   - Kick Members
-   - Ban Members
-   - Manage Messages
-   - Manage Channels
-   - Read Message History
-   - View Channels
-   - Send Messages
-   (or **Administrator** if you prefer one switch).
-4. Copy the generated URL at the bottom.
-
-> If the **Bot** tab has **Public Bot** turned off, only the application owner can invite it. Leave it off if you want to keep the bot private to servers you control.
-
-### 3. Invite the bot
-
-1. Paste the URL into your browser.
-2. Choose the new server from the dropdown (you need **Manage Server** permission there).
-3. Click **Authorize** and complete the captcha.
-4. The bot now appears in the member list (offline until you start it).
-
-### 4. Point the bot at the new server
-
-1. In Discord, right-click the new server's icon → **Copy Server ID**.
-2. Set it in `.env`:
-
-   ```env
-   GUILD_ID=the-new-server-id
-   ```
-
-### 5. Register the slash commands
-
-Run this from the project directory:
+### 5. Register the commands and start the bot
 
 ```bash
 node deploy-commands.js
-```
-
-You should see `Successfully reloaded guild application (/) commands.`
-
-Notes:
-
-- The script clears all **global** commands and then registers the commands to the server in `GUILD_ID` only. Guild commands appear instantly.
-- Re-run it whenever you add, remove, or change a command, or switch `GUILD_ID` to a different server.
-- Running it for a new `GUILD_ID` does **not** remove the commands from the previous server; they stay registered there until you remove them (or kick the bot).
-
-### 6. Start the bot
-
-```bash
 npm start
 ```
 
-The console should print `Logged in as <bot name>`. The bot must be running for slash commands to work.
+You should see `Logged in as ...`. Run `node deploy-commands.js` again whenever the bot gets new commands.
 
-### 7. Set the role hierarchy
+### 6. Post the Verify button
 
-In the new server go to **Server Settings → Roles** and drag the bot's role **above** any role it needs to manage, give roles, or kick members from. Discord will refuse role changes and kicks on roles equal to or higher than the bot's role.
+Run `/verify-setup` in Discord. The bot posts the Verify message in your verify channel.
 
-### 8. Use the slash commands
+## How verification works
 
-1. In any channel the bot can see, type `/` and pick a command from the OrcaBot list (or keep typing, e.g. `/stats`).
-2. Fill in the options Discord shows, then press **Enter**.
-3. You (the person running the command) also need the matching permission, see the table below.
+1. A new member clicks **Verify** and types their in-game character name.
+2. The bot looks the character up and decides:
+   - **Everything checks out:** they get `Verified` and their nickname is set to the character name, after a short random wait.
+   - **Discord account is too new, or the character's level or gear score is too low:** the bot opens a private ticket with the member and the officers. It asks for an in-game screenshot with a random gear piece taken off. An officer clicks **Verify** or **Ban**, and the ticket is archived.
+   - **Wrong faction or server:** they're turned away.
+   - **Typo or unknown name:** they're asked to try again.
+   - **Anything unusual** (the name's already claimed by someone else, or the lookup site is down): it goes to the review channel with **Approve** and **Deny** buttons.
+3. Each character can only belong to one Discord account.
+4. Archived tickets are deleted after 7 days without messages.
 
-If the commands don't appear, see [Troubleshooting](#troubleshooting).
+Members never see how the checks work. All the details go to the mods-only channels.
 
-## Usage
+**Trying it out first:** set `VERIFY_MODE=shadow` in `.env`. The bot then only posts what it *would* do in the log channel and doesn't change anything. Switch to `live` when you're happy.
 
-Start the bot:
+## Commands
 
-```bash
-npm start
-```
+### Verification
 
-## Available Slash Commands
+| Command | What it does | Who can use it |
+| --- | --- | --- |
+| `/verify-setup` | Post the Verify message | Manage Server |
+| `/refresh-verify-channel` | Replace the Verify message, e.g. after changing requirements | Manage Server |
+| `/verify-manual` | Verify someone by hand with their character name (also closes their open ticket or review case) | Manage Roles |
+| `/unverify` | Take away someone's Verified role, nickname and character | Manage Roles |
+| `/whois-char` | See who owns a character, or which character someone has | Manage Roles |
+| `/verify-config` | See the settings, or change the min level, gear score, account age or how long archived tickets are kept | Manage Roles |
 
-| Command           | What it does                                                           | Permission you need |
-| ----------------- | ---------------------------------------------------------------------- | ------------------- |
-| `/unbanall`       | Unban all users from the server                                        | Ban Members         |
-| `/kickbyrole`     | Kick all users with a specific role                                    | Kick Members        |
-| `/giverolebyrole` | Give a role to everyone who has any of up to 10 source roles           | Manage Roles        |
-| `/bulkrole`       | Give a role to every member (bots only with `includebots:true`)        | Manage Roles        |
-| `/trimrole`       | Remove a role from members who have none of up to 10 "keep" roles      | Manage Roles        |
-| `/purge`          | Bulk delete recent messages                                            | Manage Messages     |
-| `/renameguild`    | Rename a role                                                          | Manage Roles        |
-| `/movechannels`   | Move up to 10 channels into a category                                 | Manage Channels     |
-| `/membersbyrole`  | List members matching a role name                                      | -                   |
-| `/stats`          | Show how many members have each role                                   | Manage Server       |
-| `/goodboy`        | Compliment a member                                                    | -                   |
-| `/stfu`           | Shut down the bot (owner only, uses `BOT_OWNER_ID`)                    | Bot owner           |
+### Mod tools
 
-### Command details
+| Command | What it does | Who can use it |
+| --- | --- | --- |
+| `/bulkrole` | Give a role to every member | Manage Roles |
+| `/giverolebyrole` | Give a role to everyone who has any of up to 10 other roles | Manage Roles |
+| `/trimrole` | Remove a role from everyone who has none of up to 10 "keep" roles | Manage Roles |
+| `/renameguild` | Rename a role | Manage Roles |
+| `/kickbyrole` | Kick everyone with a role | Kick Members |
+| `/unbanall` | Unban everyone | Ban Members |
+| `/purge` | Delete recent messages | Manage Messages |
+| `/movechannels` | Move up to 10 channels into a category | Manage Channels |
+| `/stats` | Show how many members have each role | Manage Server |
+| `/membersbyrole` | List everyone with a role | Anyone |
+| `/goodboy` | Compliment someone | Anyone |
+| `/stfu` | Shut the bot down | Bot owner only |
 
-**`/giverolebyrole torole:@New fromrole1:@A [fromrole2..fromrole10]`**
-Gives `torole` to every member who has at least one of the `fromrole` roles and doesn't already have it. Slash commands can't take a list, so the source roles are numbered options; only `fromrole1` is required.
+## Testing
 
-**`/bulkrole role:@Role [includebots]`**
-Gives the role to every member. Bots are skipped unless `includebots` is true, and members who already have the role are skipped. Works on large servers: the reply is deferred, the member fetch waits up to 120 seconds, roles are assigned 5 at a time, and progress is shown every 50 members. Each member who receives the role is logged to the console. The reply ends with the number of non-bot members and how many of them have the role.
+- `npm run dev`: starts the bot with a blank slate every time. Nothing is saved, and members can retry straight away.
+- `npm run db:reset`: wipes the bot's saved data (stop the bot first).
+- `npm test`: runs the automated checks.
 
-**`/trimrole role:@A keep1:@X [keep2..keep10] [includebots]`**
-Removes role A from every member who has it but has none of the `keep` roles. Bots are skipped unless `includebots` is true. Removals are logged to the console, and the same large-server handling as `/bulkrole` applies.
+Saved data doesn't include Discord itself. Test accounts keep their roles and nicknames, so use `/unverify` to reset them.
 
-`/bulkrole` and `/trimrole` refuse to run if the role is `@everyone`, is managed by an integration, or is not below both the bot's highest role and yours (the server owner is exempt from the last check).
+## Something's not working?
 
-> After adding or changing any command, run `node deploy-commands.js` and restart the bot so Discord picks up the new options.
-
-## Troubleshooting
-
-- **Slash commands don't show up**: make sure you invited the bot with the `applications.commands` scope, `GUILD_ID` matches the server you're in, and you ran `node deploy-commands.js`. Restart Discord (Ctrl+R) to refresh the command list.
-- **`Missing Access` (50001) when deploying**: the bot isn't in that server yet, or `GUILD_ID` is wrong.
-- **`Used disallowed intents`**: enable **Server Members Intent** in the Developer Portal (step 1).
-- **"Unknown interaction" / `GuildMembersTimeout`**: the member fetch timed out, usually because **Server Members Intent** is off (step 1) or the server is very large.
-- **`Missing Permissions` when running a command**: raise the bot's role above the target roles (step 7) and check it has the permission the command needs.
-- **"The application did not respond"**: the bot isn't running. Start it with `npm start`.
-- **Invalid token**: reset the token in the Developer Portal and update `BOT_TOKEN` in `.env`.
+- **Commands don't show up:** run `node deploy-commands.js`, check `GUILD_ID` is your server, then press Ctrl+R in Discord.
+- **"The application did not respond":** the bot isn't running. Start it with `npm start`.
+- **"Missing Permissions":** move the bot's role higher (step 4) and check it has the permissions from step 2.
+- **"Used disallowed intents":** turn on **Server Members Intent** (step 2).
+- **The bot won't start and lists missing settings:** fill those in `.env`.
+- **Invalid token:** reset it in the Developer Portal and update `BOT_TOKEN`.
 
 ## License
 
-This project is licensed under the MIT License.
+MIT

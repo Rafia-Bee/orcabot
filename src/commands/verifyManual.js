@@ -10,6 +10,7 @@ const { lookupCharacter } = require("../verification/shugo");
 const { grantAccess } = require("../verification/access");
 const { COLORS, buildEventEmbed, postLog } = require("../verification/embeds");
 const { closeTicketAsVerified } = require("../verification/tickets");
+const { closeReviewCaseAsApproved } = require("../verification/review");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -104,7 +105,16 @@ module.exports = {
       }
     }
     const openCase = store.getOpenReviewCase(member.id);
-    if (openCase) notes.push(`they still have open review case #${openCase.id}`);
+    if (openCase) {
+      const caseProblems = await closeReviewCaseAsApproved(interaction, openCase);
+      if (caseProblems === null) {
+        notes.push(`review case #${openCase.id} was closed by someone else at the same time`);
+      } else if (caseProblems.length) {
+        notes.push(`approved review case #${openCase.id}, but: ${caseProblems.join("; ")}`);
+      } else {
+        notes.push(`approved and closed review case #${openCase.id}`);
+      }
+    }
 
     await postLog(
       interaction.client,

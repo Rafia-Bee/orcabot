@@ -7,6 +7,7 @@ const {
 } = require("discord.js");
 const { getStore } = require("../verification/store");
 const { COLORS, unixSeconds } = require("../verification/embeds");
+const { characterUrl } = require("../verification/shugo");
 
 const METHOD_TEXT = {
   auto: "Automatic",
@@ -64,10 +65,12 @@ module.exports = {
         lines.push(claim);
         continue;
       }
+      const url = characterUrl(claim.char_name);
       embeds.push(
         new EmbedBuilder()
           .setColor(COLORS.blue)
           .setTitle(claim.char_name)
+          .setURL(url)
           .addFields(
             { name: "Member", value: `<@${claim.discord_id}> (${claim.discord_id})` },
             { name: "Legion", value: claim.legion ? escapeMarkdown(claim.legion) : "—", inline: true },
@@ -85,7 +88,8 @@ module.exports = {
               value: claim.reviewed_by ? `<@${claim.reviewed_by}>` : "—",
               inline: true,
             },
-            { name: "Verified", value: `<t:${unixSeconds(claim.created_at)}:f>`, inline: true }
+            { name: "Verified", value: `<t:${unixSeconds(claim.created_at)}:f>`, inline: true },
+            { name: "shugo.gg", value: `[View character](${url})` }
           )
       );
     }
@@ -93,7 +97,6 @@ module.exports = {
     return interaction.reply({
       content: lines.join("\n") || undefined,
       embeds,
-      flags: MessageFlags.Ephemeral,
       allowedMentions: { parse: [] },
     });
   },

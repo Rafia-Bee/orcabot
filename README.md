@@ -174,7 +174,7 @@ Members never see how the checks work. All the details go to the mods-only chann
 | `/verify-manual` | Verify someone by hand with their character name (also closes their open ticket or review case) | Manage Roles |
 | `/unverify` | Take away someone's Verified role, nickname and character | Manage Roles |
 | `/whois-char` | Post who owns a character, or which character someone has, with their shugo.gg link and account age | Manage Roles |
-| `/recheck-members` | Look up verified members' characters again: updates legion and class roles, and sends anyone renamed, transferred or on the wrong faction to the review channel. Pick a `user` to check one person, or leave it empty for everyone (runs in the background, results in the log channel). | Manage Roles |
+| `/recheck-members` | Look up verified members' characters again: updates legion and class roles and the gear score in nicknames, and sends anyone renamed, transferred or on the wrong faction to the review channel. Pick a `user` to check one person, or leave it empty for everyone (runs in the background, results in the log channel). | Manage Roles |
 | `/verify-config` | See the settings, turn strict verification on or off, or change the min level, gear score, account age or how long archived tickets are kept | Manage Roles |
 
 ### Mod tools

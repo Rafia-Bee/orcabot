@@ -93,10 +93,25 @@ function nicknameFor(charName, character) {
   return nickname.length <= MAX_NICKNAME_LENGTH ? nickname : charName;
 }
 
+function canRename(member) {
+  return member.id !== member.guild.ownerId && member.manageable;
+}
+
+async function applyNickname(member, charName, character) {
+  if (!canRename(member)) return ["nickname: member is above the bot's role"];
+  const nickname = nicknameFor(charName, character);
+  if (member.nickname === nickname) return [];
+  try {
+    await member.setNickname(nickname, "Verified character name");
+    return [];
+  } catch (error) {
+    return [`nickname: ${error.message}`];
+  }
+}
+
 async function grantAccess(member, charName, character) {
   const cfg = getConfig();
   const problems = [];
-  const nickname = nicknameFor(charName, character);
 
   try {
     await member.roles.add(cfg.verifiedRoleId, `Verified as ${charName}`);
@@ -104,16 +119,7 @@ async function grantAccess(member, charName, character) {
     problems.push(`role: ${error.message}`);
   }
   if (problems.length === 0) problems.push(...(await applyCharacterRoles(member, character)));
-
-  if (member.id === member.guild.ownerId || !member.manageable) {
-    problems.push("nickname: member is above the bot's role");
-  } else if (member.nickname !== nickname) {
-    try {
-      await member.setNickname(nickname, "Verified character name");
-    } catch (error) {
-      problems.push(`nickname: ${error.message}`);
-    }
-  }
+  problems.push(...(await applyNickname(member, charName, character)));
 
   return { roleGranted: !problems.some((p) => p.startsWith("role")), problems };
 }
@@ -211,6 +217,8 @@ function startGrantSweeper(client) {
 module.exports = {
   grantAccess,
   nicknameFor,
+  canRename,
+  applyNickname,
   applyCharacterRoles,
   revokeAccess,
   randomGrantDelayMs,

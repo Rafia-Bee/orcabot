@@ -2,7 +2,7 @@ const { escapeMarkdown } = require("discord.js");
 const { getConfig } = require("./config");
 const { getStore } = require("./store");
 const { lookupCharacter } = require("./shugo");
-const { applyCharacterRoles } = require("./access");
+const { applyCharacterRoles, applyNickname, canRename } = require("./access");
 const { openReviewCase } = require("./review");
 const { COLORS, buildEventEmbed, postLog } = require("./embeds");
 
@@ -61,6 +61,7 @@ async function recheckClaim(client, guild, claim) {
   }
   store.updateClaimDetails(claim.discord_id, character);
   const problems = await applyCharacterRoles(member, character);
+  if (canRename(member)) problems.push(...(await applyNickname(member, claim.char_name, character)));
 
   return { status: changes.length ? "updated" : "unchanged", claim, changes, problems };
 }

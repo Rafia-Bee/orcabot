@@ -55,6 +55,7 @@ You'll need:
 | `REVIEW_TICKETS_CATEGORY_ID` | Category for open review tickets |
 | `ARCHIVED_REVIEW_TICKETS_CATEGORY_ID` | Category closed tickets get moved to |
 | `MEE6_TICKET_PARENT_IDS` | *(optional)* Where MEE6 opens tickets: the channel its ticket threads appear in, or the category its ticket channels go in. When a ticket opens, the bot posts the opener's character, gear and account age in it. |
+| `MEE6_TICKET_RENAMES` | *(optional)* Rename MEE6 tickets by type, like `Force Leader:force,Class Master:master`. If the channel topic MEE6 sets contains the phrase, `0001-name` becomes `force-name`. |
 
 The rest (faction, server, level and gear score requirements, and so on) already have sensible values. It's worth setting `SHUGO_HEALTHCHECK_CHARACTER` to your own character: the bot looks it up on startup and warns you in the log channel if character lookups stop working.
 

@@ -73,6 +73,23 @@ function parseClassRoles(raw) {
   return parseRoleMap(raw, "CLASS_ROLES");
 }
 
+function parseTicketRenames(raw) {
+  if (!raw || raw.trim() === "") return [];
+  return raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const separator = entry.lastIndexOf(":");
+      const phrase = entry.slice(0, separator).trim();
+      const prefix = entry.slice(separator + 1).trim().toLowerCase();
+      if (separator < 1 || !phrase || !/^[a-z0-9_]+$/.test(prefix)) {
+        throw new Error(`MEE6_TICKET_RENAMES entry "${entry}" must look like Phrase:prefix`);
+      }
+      return { phrase, prefix };
+    });
+}
+
 function loadConfig() {
   const missing = [];
   const env = requiredFromEnv(missing);
@@ -136,6 +153,7 @@ function loadConfig() {
       .split(",")
       .map((id) => id.trim())
       .filter(Boolean),
+    mee6TicketRenames: parseTicketRenames(process.env.MEE6_TICKET_RENAMES),
     ...requirements,
     shugo,
     submitCooldownSeconds: intFromEnv("VERIFY_COOLDOWN_SECONDS", 60),

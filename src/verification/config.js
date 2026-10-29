@@ -132,6 +132,10 @@ function loadConfig() {
     legionRoles: parseLegionRoles(process.env.LEGION_ROLES),
     guestRoleId: process.env.GUEST_ROLE_ID?.trim() || null,
     classRoles: parseClassRoles(process.env.CLASS_ROLES),
+    mee6TicketParentIds: (process.env.MEE6_TICKET_PARENT_IDS ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean),
     ...requirements,
     shugo,
     submitCooldownSeconds: intFromEnv("VERIFY_COOLDOWN_SECONDS", 60),

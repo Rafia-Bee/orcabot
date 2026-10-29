@@ -54,6 +54,7 @@ You'll need:
 | `VERIFY_REVIEW_CHANNEL_ID` | Mods-only channel for cases that need a human |
 | `REVIEW_TICKETS_CATEGORY_ID` | Category for open review tickets |
 | `ARCHIVED_REVIEW_TICKETS_CATEGORY_ID` | Category closed tickets get moved to |
+| `MEE6_TICKET_PARENT_IDS` | *(optional)* Where MEE6 opens tickets: the channel its ticket threads appear in, or the category its ticket channels go in. When a ticket opens, the bot posts the opener's character, gear and account age in it. |
 
 The rest (faction, server, level and gear score requirements, and so on) already have sensible values. It's worth setting `SHUGO_HEALTHCHECK_CHARACTER` to your own character: the bot looks it up on startup and warns you in the log channel if character lookups stop working.
 
@@ -171,7 +172,7 @@ Members never see how the checks work. All the details go to the mods-only chann
 | `/refresh-verify-channel` | Replace the Verify message, e.g. after changing requirements | Manage Server |
 | `/verify-manual` | Verify someone by hand with their character name (also closes their open ticket or review case) | Manage Roles |
 | `/unverify` | Take away someone's Verified role, nickname and character | Manage Roles |
-| `/whois-char` | See who owns a character, or which character someone has | Manage Roles |
+| `/whois-char` | Post who owns a character, or which character someone has, with their shugo.gg link and account age | Manage Roles |
 | `/recheck-members` | Look up verified members' characters again: updates legion and class roles, and sends anyone renamed, transferred or on the wrong faction to the review channel. Pick a `user` to check one person, or leave it empty for everyone (runs in the background, results in the log channel). | Manage Roles |
 | `/verify-config` | See the settings, turn strict verification on or off, or change the min level, gear score, account age or how long archived tickets are kept | Manage Roles |
 

@@ -1,6 +1,7 @@
 const { EmbedBuilder, escapeMarkdown } = require("discord.js");
 const { getConfig } = require("./config");
 const { OUTCOMES, DAY_MS } = require("./rules");
+const { characterUrl } = require("./shugo");
 
 const COLORS = {
   green: 0x2ecc71,
@@ -96,6 +97,60 @@ function buildSubmissionEmbed({ user, submittedName, lookup, decision, outcome, 
   return embed;
 }
 
+const METHOD_TEXT = {
+  auto: "Automatic",
+  ticket: "Review ticket",
+  manual: "Manual (/verify-manual or review queue)",
+};
+
+function addAccountFields(embed, user, member) {
+  return embed.addFields(
+    { name: "Account created", value: `<t:${unixSeconds(user.createdTimestamp)}:R>`, inline: true },
+    {
+      name: "Joined server",
+      value: member?.joinedTimestamp ? `<t:${unixSeconds(member.joinedTimestamp)}:R>` : "—",
+      inline: true,
+    }
+  );
+}
+
+function buildClaimEmbed(claim, member = null) {
+  const url = characterUrl(claim.char_name);
+  const embed = new EmbedBuilder()
+    .setColor(COLORS.blue)
+    .setTitle(claim.char_name)
+    .setURL(url)
+    .addFields(
+      { name: "Member", value: `<@${claim.discord_id}> (${claim.discord_id})` },
+      { name: "Legion", value: claim.legion ? escapeMarkdown(claim.legion) : "—", inline: true },
+      { name: "Class", value: claim.class_name ?? "—", inline: true },
+      { name: "Level", value: String(claim.level ?? "?"), inline: true },
+      { name: "Gear score", value: String(claim.gear_score ?? "?"), inline: true },
+      {
+        name: "Combat power",
+        value: claim.combat_power?.toLocaleString("en-US") ?? "?",
+        inline: true,
+      },
+      { name: "Method", value: METHOD_TEXT[claim.method] ?? claim.method, inline: true },
+      {
+        name: "Approved by",
+        value: claim.reviewed_by ? `<@${claim.reviewed_by}>` : "—",
+        inline: true,
+      },
+      { name: "Verified", value: `<t:${unixSeconds(claim.created_at)}:f>`, inline: true }
+    );
+  if (member) addAccountFields(embed, member.user, member);
+  return embed.addFields({ name: "shugo.gg", value: `[View character](${url})` });
+}
+
+function buildNoClaimEmbed(member) {
+  const embed = new EmbedBuilder()
+    .setColor(COLORS.grey)
+    .setTitle("No character claimed")
+    .setDescription(`${member} (${member.id}) hasn't verified a character.`);
+  return addAccountFields(embed, member.user, member);
+}
+
 function buildEventEmbed({ color, title, description, fields = [] }) {
   return new EmbedBuilder()
     .setColor(color)
@@ -125,6 +180,8 @@ module.exports = {
   unixSeconds,
   addCharacterFields,
   buildSubmissionEmbed,
+  buildClaimEmbed,
+  buildNoClaimEmbed,
   buildEventEmbed,
   postToChannel,
   postLog,

@@ -2,18 +2,10 @@ const {
   SlashCommandBuilder,
   PermissionsBitField,
   MessageFlags,
-  EmbedBuilder,
   escapeMarkdown,
 } = require("discord.js");
 const { getStore } = require("../verification/store");
-const { COLORS, unixSeconds } = require("../verification/embeds");
-const { characterUrl } = require("../verification/shugo");
-
-const METHOD_TEXT = {
-  auto: "Automatic",
-  ticket: "Review ticket",
-  manual: "Manual (/verify-manual or review queue)",
-};
+const { buildClaimEmbed } = require("../verification/embeds");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -65,33 +57,8 @@ module.exports = {
         lines.push(claim);
         continue;
       }
-      const url = characterUrl(claim.char_name);
-      embeds.push(
-        new EmbedBuilder()
-          .setColor(COLORS.blue)
-          .setTitle(claim.char_name)
-          .setURL(url)
-          .addFields(
-            { name: "Member", value: `<@${claim.discord_id}> (${claim.discord_id})` },
-            { name: "Legion", value: claim.legion ? escapeMarkdown(claim.legion) : "—", inline: true },
-            { name: "Class", value: claim.class_name ?? "—", inline: true },
-            { name: "Level", value: String(claim.level ?? "?"), inline: true },
-            { name: "Gear score", value: String(claim.gear_score ?? "?"), inline: true },
-            {
-              name: "Combat power",
-              value: claim.combat_power?.toLocaleString("en-US") ?? "?",
-              inline: true,
-            },
-            { name: "Method", value: METHOD_TEXT[claim.method] ?? claim.method, inline: true },
-            {
-              name: "Approved by",
-              value: claim.reviewed_by ? `<@${claim.reviewed_by}>` : "—",
-              inline: true,
-            },
-            { name: "Verified", value: `<t:${unixSeconds(claim.created_at)}:f>`, inline: true },
-            { name: "shugo.gg", value: `[View character](${url})` }
-          )
-      );
+      const member = await interaction.guild.members.fetch(claim.discord_id).catch(() => null);
+      embeds.push(buildClaimEmbed(claim, member));
     }
 
     return interaction.reply({

@@ -24,6 +24,7 @@ const {
   unixSeconds,
 } = require("./embeds");
 const { randomGrantDelayMs, startGrantSweeper } = require("./access");
+const { watchMee6Tickets } = require("./mee6Tickets");
 const { openReviewCase, isReviewButton, handleReviewButton } = require("./review");
 const {
   openTicket,
@@ -353,6 +354,7 @@ function onReady(client) {
   startGrantSweeper(client);
   startArchiveCleanup(client);
   startCooldownPruning();
+  watchMee6Tickets(client);
   checkShugo(client).catch((error) => console.error("shugo.gg check error:", error));
 }
 

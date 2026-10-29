@@ -84,9 +84,19 @@ async function applyCharacterRoles(member, character) {
   return problems;
 }
 
+const MAX_NICKNAME_LENGTH = 32;
+
+function nicknameFor(charName, character) {
+  const gearScore = character?.gearScore;
+  if (gearScore === undefined || gearScore === null) return charName;
+  const nickname = `${gearScore} - ${charName}`;
+  return nickname.length <= MAX_NICKNAME_LENGTH ? nickname : charName;
+}
+
 async function grantAccess(member, charName, character) {
   const cfg = getConfig();
   const problems = [];
+  const nickname = nicknameFor(charName, character);
 
   try {
     await member.roles.add(cfg.verifiedRoleId, `Verified as ${charName}`);
@@ -97,9 +107,9 @@ async function grantAccess(member, charName, character) {
 
   if (member.id === member.guild.ownerId || !member.manageable) {
     problems.push("nickname: member is above the bot's role");
-  } else if (member.nickname !== charName) {
+  } else if (member.nickname !== nickname) {
     try {
-      await member.setNickname(charName, "Verified character name");
+      await member.setNickname(nickname, "Verified character name");
     } catch (error) {
       problems.push(`nickname: ${error.message}`);
     }
@@ -164,6 +174,7 @@ async function processGrant(client, grant) {
   const { roleGranted, problems } = await grantAccess(member, grant.char_name, {
     legion: claim?.legion ?? null,
     className: claim?.class_name ?? null,
+    gearScore: claim?.gear_score ?? null,
   });
   if (problems.length > 0) {
     await postLog(
@@ -199,6 +210,7 @@ function startGrantSweeper(client) {
 
 module.exports = {
   grantAccess,
+  nicknameFor,
   applyCharacterRoles,
   revokeAccess,
   randomGrantDelayMs,

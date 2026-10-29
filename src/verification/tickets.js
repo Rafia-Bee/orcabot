@@ -14,7 +14,7 @@ const {
 } = require("discord.js");
 const { getConfig } = require("./config");
 const { getStore } = require("./store");
-const { grantAccess } = require("./access");
+const { grantAccess, nicknameFor } = require("./access");
 const { COLORS, buildEventEmbed, postLog } = require("./embeds");
 const { DAY_MS } = require("./rules");
 
@@ -185,7 +185,7 @@ async function askConfirmation(interaction, ticket, action) {
   return interaction.reply({
     content: isBan
       ? `Ban <@${ticket.discord_id}> (**${name}**) from the server?`
-      : `Verify <@${ticket.discord_id}>? They'll get the Verified role and the nickname **${name}**.`,
+      : `Verify <@${ticket.discord_id}>? They'll get the Verified role and the nickname **${escapeMarkdown(nicknameFor(ticket.char_name, ticket.character))}**.`,
     components: [row],
     flags: MessageFlags.Ephemeral,
     allowedMentions: { parse: [] },

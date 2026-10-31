@@ -8,6 +8,13 @@ const OUTCOMES = {
   RETRY: "retry",
 };
 
+function isSameCharacter(claim, character) {
+  if (claim.character_id && character.characterId) {
+    return claim.character_id === character.characterId;
+  }
+  return String(claim.char_name).toLowerCase() === String(character.name).toLowerCase();
+}
+
 function decide({ lookup, accountAgeMs, charClaim, ownClaim, discordId, config }) {
   if (lookup.status === "invalid_name") {
     return { outcome: OUTCOMES.RETRY, reason: "invalid_name" };
@@ -71,7 +78,7 @@ function decide({ lookup, accountAgeMs, charClaim, ownClaim, discordId, config }
     };
   }
 
-  if (ownClaim && !same(ownClaim.char_name, character.name)) {
+  if (ownClaim && !isSameCharacter(ownClaim, character)) {
     return {
       outcome: OUTCOMES.REVIEW,
       reason: "account_has_other_claim",
@@ -89,4 +96,4 @@ function decide({ lookup, accountAgeMs, charClaim, ownClaim, discordId, config }
   return { outcome: OUTCOMES.VERIFY, reason: "passed" };
 }
 
-module.exports = { decide, OUTCOMES, DAY_MS };
+module.exports = { decide, isSameCharacter, OUTCOMES, DAY_MS };

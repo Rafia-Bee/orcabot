@@ -1,39 +1,14 @@
-const { getConfig } = require("./config");
+const { getConfig } = require("../config");
+const { createLimiter } = require("./limiter");
 
 const PROFILE_JSON_RE =
   /<script type="application\/json" id="shugo-profile">([\s\S]*?)<\/script>/;
 
-const cache = new Map();
-let queue = Promise.resolve();
-let nextRequestAt = 0;
-let pausedUntil = 0;
+const limiter = createLimiter(() => getConfig().shugo.minRequestGapMs);
 
-function characterUrl(name) {
+function profileUrl(name) {
   const { baseUrl, regionPath } = getConfig().shugo;
   return `${baseUrl}/${regionPath}/${encodeURIComponent(name)}`;
-}
-
-function isValidName(name) {
-  return (
-    typeof name === "string" &&
-    name.length > 0 &&
-    name.length <= getConfig().maxNameLength &&
-    !/[\s/\\?#%]/.test(name)
-  );
-}
-
-function enqueue(fn) {
-  const run = queue.then(async () => {
-    const wait = nextRequestAt - Date.now();
-    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-    try {
-      return await fn();
-    } finally {
-      nextRequestAt = Date.now() + getConfig().shugo.minRequestGapMs;
-    }
-  });
-  queue = run.catch(() => {});
-  return run;
 }
 
 function parseProfile(html) {
@@ -58,6 +33,7 @@ function parseProfile(html) {
   }
 
   return {
+    characterId: null,
     name: profile.characterName,
     level: profile.characterLevel,
     className: profile.className,
@@ -73,12 +49,12 @@ function parseProfile(html) {
 }
 
 async function fetchCharacter(name) {
-  if (Date.now() < pausedUntil) {
+  if (limiter.isPaused()) {
     return { status: "unavailable", reason: "rate_limited" };
   }
 
-  const { userAgent, requestTimeoutMs } = getConfig().shugo;
-  const url = characterUrl(name);
+  const { userAgent, requestTimeoutMs } = getConfig().lookup;
+  const url = profileUrl(name);
   let res;
   try {
     res = await fetch(url, {
@@ -94,7 +70,7 @@ async function fetchCharacter(name) {
 
   if (res.status === 429) {
     const resetSeconds = Number(res.headers.get("ratelimit-reset")) || 600;
-    pausedUntil = Date.now() + resetSeconds * 1000;
+    limiter.pause(resetSeconds * 1000);
     return { status: "unavailable", reason: "rate_limited" };
   }
 
@@ -104,29 +80,18 @@ async function fetchCharacter(name) {
 
   try {
     const character = parseProfile(await res.text());
-    return { status: "found", character: { ...character, url } };
+    return { status: "found", character: { ...character, url, source: "shugo" } };
   } catch (error) {
     return { status: "unavailable", reason: `parse: ${error.message}` };
   }
 }
 
-async function lookupCharacter(rawName, { fresh = false } = {}) {
-  const name = typeof rawName === "string" ? rawName.trim() : "";
-  if (!isValidName(name)) return { status: "invalid_name" };
-
-  const key = name.toLowerCase();
-  const cached = cache.get(key);
-  if (!fresh && cached && cached.expiresAt > Date.now()) return cached.result;
-
-  const result = await enqueue(() => fetchCharacter(name));
-  if (result.status !== "unavailable") {
-    if (cache.size > 1000) {
-      const now = Date.now();
-      for (const [k, v] of cache) if (v.expiresAt <= now) cache.delete(k);
-    }
-    cache.set(key, { result, expiresAt: Date.now() + getConfig().shugo.cacheTtlMs });
-  }
-  return result;
-}
-
-module.exports = { lookupCharacter, parseProfile, characterUrl };
+module.exports = {
+  name: "shugo",
+  label: "shugo.gg",
+  minRequestGapMs: () => getConfig().shugo.minRequestGapMs,
+  lookup: (name) => limiter.run(() => fetchCharacter(name)),
+  reset: () => limiter.reset(),
+  profileUrl,
+  parseProfile,
+};

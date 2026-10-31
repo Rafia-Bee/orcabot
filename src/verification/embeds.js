@@ -1,7 +1,7 @@
 const { EmbedBuilder, escapeMarkdown } = require("discord.js");
 const { getConfig } = require("./config");
 const { OUTCOMES, DAY_MS } = require("./rules");
-const { characterUrl } = require("./shugo");
+const { SOURCES, characterUrl, primarySource } = require("./lookup");
 
 const COLORS = {
   green: 0x2ecc71,
@@ -24,7 +24,7 @@ const REASON_TEXT = {
   invalid_name: "Not a valid character name",
   not_found: "Character not found",
   account_too_new: "Discord account is too new",
-  shugo_unavailable: "shugo.gg lookup failed",
+  shugo_unavailable: "Character lookup failed",
   wrong_faction: "Wrong faction",
   wrong_server: "Wrong server",
   level_too_low: "Level below minimum",
@@ -34,6 +34,7 @@ const REASON_TEXT = {
   recheck_not_found: "Re-check: character not found (renamed, transferred or deleted)",
   recheck_wrong_faction: "Re-check: character is now a different faction",
   recheck_wrong_server: "Re-check: character is now on a different server",
+  recheck_different_character: "Re-check: the name now belongs to a different character (renamed or deleted, name reused)",
 };
 
 function reasonText(reason) {
@@ -55,6 +56,9 @@ function addCharacterFields(embed, character) {
     { name: "Faction / Server", value: `${c.faction ?? "?"} / ${c.server ?? "?"}`, inline: true },
     { name: "Legion", value: c.legion ? escapeMarkdown(c.legion) : "—", inline: true }
   );
+  if (c.source && c.source !== primarySource().name) {
+    embed.addFields({ name: "Source", value: `${SOURCES[c.source]?.label ?? c.source} (backup)`, inline: true });
+  }
 }
 
 function buildSubmissionEmbed({ user, submittedName, lookup, decision, outcome, accountAgeMs }) {
@@ -140,7 +144,7 @@ function buildClaimEmbed(claim, member = null) {
       { name: "Verified", value: `<t:${unixSeconds(claim.created_at)}:f>`, inline: true }
     );
   if (member) addAccountFields(embed, member.user, member);
-  return embed.addFields({ name: "shugo.gg", value: `[View character](${url})` });
+  return embed.addFields({ name: "Profile", value: `[View character](${url})` });
 }
 
 function buildNoClaimEmbed(member) {

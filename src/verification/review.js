@@ -149,7 +149,7 @@ async function approve(interaction, reviewCase) {
   const modId = interaction.user.id;
   const charName = reviewCase.character?.name ?? reviewCase.char_name;
 
-  const claim = charName ? store.getVerificationByCharName(charName) : null;
+  const claim = charName ? store.getVerificationForCharacter(reviewCase.character ?? { name: charName }) : null;
   if (claim && claim.discord_id !== reviewCase.discord_id) {
     return interaction.followUp({
       content: `**${escapeMarkdown(charName)}** is already claimed by <@${claim.discord_id}>. Deny this case, or remove the other claim first.`,

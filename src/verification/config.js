@@ -90,6 +90,23 @@ function parseTicketRenames(raw) {
     });
 }
 
+const LOOKUP_SOURCE_NAMES = ["aion2index", "shugo"];
+
+function parseLookupSources(raw) {
+  const sources = (raw ?? "shugo")
+    .split(",")
+    .map((source) => source.trim().toLowerCase())
+    .filter(Boolean);
+  if (sources.length === 0) throw new Error("LOOKUP_SOURCES must name at least one site");
+  for (const source of sources) {
+    if (!LOOKUP_SOURCE_NAMES.includes(source)) {
+      throw new Error(`LOOKUP_SOURCES: unknown site "${source}" (use ${LOOKUP_SOURCE_NAMES.join(", ")})`);
+    }
+  }
+  if (new Set(sources).size !== sources.length) throw new Error("LOOKUP_SOURCES lists a site twice");
+  return sources;
+}
+
 function loadConfig() {
   const missing = [];
   const env = requiredFromEnv(missing);
@@ -104,18 +121,35 @@ function loadConfig() {
     archivedTicketRetentionDays: env.int("ARCHIVED_TICKET_RETENTION_DAYS"),
     strictVerification: env.bool("STRICT_VERIFICATION"),
   };
+  const lookup = {
+    sources: parseLookupSources(process.env.LOOKUP_SOURCES),
+    failoverMinutes: intFromEnv("LOOKUP_FAILOVER_MINUTES", 5),
+    userAgent: env.string("SHUGO_USER_AGENT"),
+    requestTimeoutMs: env.int("SHUGO_REQUEST_TIMEOUT_MS"),
+    cacheTtlMs: env.int("SHUGO_CACHE_TTL_MS"),
+    healthcheckCharacter: process.env.SHUGO_HEALTHCHECK_CHARACTER?.trim() || null,
+  };
   const shugo = {
     baseUrl: env.string("SHUGO_BASE_URL")?.replace(/\/+$/, ""),
     regionPath: env.string("SHUGO_REGION_PATH")?.replace(/^\/+|\/+$/g, ""),
-    userAgent: env.string("SHUGO_USER_AGENT"),
-    requestTimeoutMs: env.int("SHUGO_REQUEST_TIMEOUT_MS"),
     minRequestGapMs: env.int("SHUGO_MIN_REQUEST_GAP_MS"),
-    cacheTtlMs: env.int("SHUGO_CACHE_TTL_MS"),
-    healthcheckCharacter: process.env.SHUGO_HEALTHCHECK_CHARACTER?.trim() || null,
+  };
+  const aion2index = {
+    apiKey: process.env.AION2INDEX_API_KEY?.trim() || null,
+    baseUrl: (process.env.AION2INDEX_BASE_URL?.trim() || "https://aion2index.com/api/v1/characters").replace(
+      /\/+$/,
+      ""
+    ),
+    regionPath: (process.env.AION2INDEX_REGION_PATH?.trim() || "eu/israphel").replace(/^\/+|\/+$/g, ""),
+    minRequestGapMs: intFromEnv("AION2INDEX_MIN_REQUEST_GAP_MS", 1500),
   };
   if (missing.length > 0) {
     throw new Error(`Missing verification settings in .env: ${missing.join(", ")}`);
   }
+  if (lookup.sources.includes("aion2index") && !aion2index.apiKey) {
+    throw new Error("LOOKUP_SOURCES includes aion2index, but AION2INDEX_API_KEY is empty");
+  }
+  if (lookup.failoverMinutes < 0) throw new Error("LOOKUP_FAILOVER_MINUTES must be >= 0");
 
   const mode = (process.env.VERIFY_MODE || "shadow").trim();
   if (!["shadow", "live"].includes(mode)) {
@@ -155,7 +189,9 @@ function loadConfig() {
       .filter(Boolean),
     mee6TicketRenames: parseTicketRenames(process.env.MEE6_TICKET_RENAMES),
     ...requirements,
+    lookup,
     shugo,
+    aion2index,
     submitCooldownSeconds: intFromEnv("VERIFY_COOLDOWN_SECONDS", 60),
     raid: {
       submissionsThreshold: intFromEnv("RAID_SUBMISSIONS_THRESHOLD", 20),
@@ -225,6 +261,7 @@ module.exports = {
   missingKeys,
   parseLegionRoles,
   parseClassRoles,
+  parseLookupSources,
   EDITABLE_SETTINGS,
   updateSetting,
 };

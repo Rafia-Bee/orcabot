@@ -350,7 +350,7 @@ async function confirmVerify(interaction, ticket) {
       components: [],
     });
   }
-  const claim = store.getVerificationByCharName(ticket.char_name);
+  const claim = store.getVerificationForCharacter(ticket.character ?? { name: ticket.char_name });
   if (claim && claim.discord_id !== ticket.discord_id) {
     return interaction.update({
       content: `**${escapeMarkdown(ticket.char_name)}** is already claimed by <@${claim.discord_id}>. Remove that claim first, or ban this member.`,

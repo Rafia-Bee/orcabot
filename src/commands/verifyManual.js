@@ -6,7 +6,7 @@ const {
 } = require("discord.js");
 const { getConfig } = require("../verification/config");
 const { getStore } = require("../verification/store");
-const { lookupCharacter } = require("../verification/shugo");
+const { lookupCharacter } = require("../verification/lookup");
 const { grantAccess } = require("../verification/access");
 const { COLORS, buildEventEmbed, postLog } = require("../verification/embeds");
 const { closeTicketAsVerified } = require("../verification/tickets");
@@ -54,7 +54,7 @@ module.exports = {
     }
     if (lookup.status === "not_found") {
       return interaction.editReply(
-        `**${escapeMarkdown(name)}** wasn't found on shugo.gg (${cfg.requiredServer}). Check the spelling.`
+        `**${escapeMarkdown(name)}** wasn't found on ${cfg.requiredServer}. Check the spelling.`
       );
     }
     const character = lookup.status === "found" ? lookup.character : { name };
@@ -87,11 +87,11 @@ module.exports = {
 
     const notes = [...problems];
     if (lookup.status === "unavailable") {
-      notes.push(`shugo.gg lookup failed (${lookup.reason}), so the name was saved as typed`);
+      notes.push(`character lookup failed (${lookup.reason}), so the name was saved as typed`);
     } else {
       const c = lookup.character;
       if (c.faction !== cfg.requiredFaction || c.server !== cfg.requiredServer) {
-        notes.push(`shugo.gg shows ${c.faction} on ${c.server}`);
+        notes.push(`the character shows as ${c.faction} on ${c.server}`);
       }
       if (c.level < cfg.minLevel || (c.gearScore ?? 0) < cfg.minGearScore) {
         notes.push(`below requirements: level ${c.level}, gear score ${c.gearScore ?? "?"}`);

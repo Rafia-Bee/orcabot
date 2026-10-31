@@ -1,9 +1,10 @@
 const { escapeMarkdown } = require("discord.js");
 const { getConfig } = require("./config");
 const { getStore } = require("./store");
-const { lookupCharacter } = require("./shugo");
+const { lookupCharacter } = require("./lookup");
 const { applyCharacterRoles, applyNickname, canRename } = require("./access");
 const { openReviewCase } = require("./review");
+const { isSameCharacter } = require("./rules");
 const { COLORS, buildEventEmbed, postLog } = require("./embeds");
 
 const MAX_CONSECUTIVE_FAILURES = 5;
@@ -35,6 +36,7 @@ async function recheckClaim(client, guild, claim) {
   let reviewReason = null;
   const character = lookup.status === "found" ? lookup.character : null;
   if (!character) reviewReason = "recheck_not_found";
+  else if (!isSameCharacter(claim, character)) reviewReason = "recheck_different_character";
   else if (!same(character.faction, cfg.requiredFaction)) reviewReason = "recheck_wrong_faction";
   else if (!same(character.server, cfg.requiredServer)) reviewReason = "recheck_wrong_server";
 
@@ -116,7 +118,7 @@ function buildSummary(results, { total, startedAt, startedBy, aborted }) {
     title: aborted ? "Member re-check stopped early" : "Member re-check finished",
     description:
       `Started by <@${startedBy}>, took about ${minutes} min.` +
-      (aborted ? `\nStopped after ${MAX_CONSECUTIVE_FAILURES} lookup failures in a row (shugo.gg may be down).` : ""),
+      (aborted ? `\nStopped after ${MAX_CONSECUTIVE_FAILURES} lookup failures in a row (the lookup sites may be down).` : ""),
     fields,
   });
 }

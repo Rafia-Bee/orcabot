@@ -7,6 +7,7 @@ const {
 const { getConfig } = require("../verification/config");
 const { getStore } = require("../verification/store");
 const { reasonText } = require("../verification/embeds");
+const { primarySource } = require("../verification/lookup");
 const {
   recheckClaim,
   runFullRecheck,
@@ -86,7 +87,7 @@ module.exports = {
       return interaction.editReply("No verified members have a claimed character yet.");
     }
 
-    const minutes = Math.max(1, Math.ceil((total * getConfig().shugo.minRequestGapMs) / 60_000));
+    const minutes = Math.max(1, Math.ceil((total * primarySource().minRequestGapMs()) / 60_000));
     runFullRecheck(interaction.client, interaction.guild, interaction.user.id).catch((error) =>
       console.error("Member re-check failed:", error)
     );

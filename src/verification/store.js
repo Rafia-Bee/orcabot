@@ -86,11 +86,15 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
   db.pragma("journal_mode = WAL");
   db.exec(SCHEMA);
   const verificationColumns = db.prepare("PRAGMA table_info(verifications)").all().map((c) => c.name);
-  for (const column of ["legion", "class_name"]) {
+  for (const column of ["legion", "class_name", "character_id"]) {
     if (!verificationColumns.includes(column)) {
       db.exec(`ALTER TABLE verifications ADD COLUMN ${column} TEXT`);
     }
   }
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS verifications_character_id
+      ON verifications (character_id) WHERE character_id IS NOT NULL
+  `);
 
   const stmt = {
     verificationByDiscordId: db.prepare(
@@ -99,15 +103,19 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
     verificationByCharName: db.prepare(
       "SELECT * FROM verifications WHERE char_name_lower = ?"
     ),
+    verificationByCharacterId: db.prepare(
+      "SELECT * FROM verifications WHERE character_id = ?"
+    ),
     upsertVerification: db.prepare(`
       INSERT INTO verifications
-        (discord_id, char_name, char_name_lower, level, gear_score, combat_power, legion, class_name,
-         method, reviewed_by, created_at)
+        (discord_id, char_name, char_name_lower, character_id, level, gear_score, combat_power, legion,
+         class_name, method, reviewed_by, created_at)
       VALUES
-        (@discord_id, @char_name, @char_name_lower, @level, @gear_score, @combat_power, @legion, @class_name,
-         @method, @reviewed_by, @created_at)
+        (@discord_id, @char_name, @char_name_lower, @character_id, @level, @gear_score, @combat_power, @legion,
+         @class_name, @method, @reviewed_by, @created_at)
       ON CONFLICT (discord_id) DO UPDATE SET
         char_name = excluded.char_name,
+        character_id = excluded.character_id,
         char_name_lower = excluded.char_name_lower,
         level = excluded.level,
         gear_score = excluded.gear_score,
@@ -121,10 +129,14 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
     allVerifications: db.prepare("SELECT * FROM verifications ORDER BY created_at"),
     updateClaimDetails: db.prepare(`
       UPDATE verifications SET
-        char_name = @char_name, char_name_lower = @char_name_lower, level = @level,
+        char_name = @char_name, char_name_lower = @char_name_lower,
+        character_id = COALESCE(@character_id, character_id), level = @level,
         gear_score = @gear_score, combat_power = @combat_power, legion = @legion, class_name = @class_name
       WHERE discord_id = @discord_id
     `),
+    setCharacterId: db.prepare(
+      "UPDATE verifications SET character_id = ? WHERE discord_id = ?"
+    ),
     deleteVerification: db.prepare(
       "DELETE FROM verifications WHERE discord_id = ?"
     ),
@@ -209,18 +221,37 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
       return stmt.verificationByCharName.get(charName.toLowerCase()) ?? null;
     },
 
+    getVerificationByCharacterId(characterId) {
+      return characterId ? stmt.verificationByCharacterId.get(characterId) ?? null : null;
+    },
+
+    getVerificationForCharacter(character) {
+      return (
+        this.getVerificationByCharacterId(character.characterId) ??
+        this.getVerificationByCharName(character.name)
+      );
+    },
+
     saveVerification({ discordId, character, method, reviewedBy = null }) {
-      const claim = stmt.verificationByCharName.get(character.name.toLowerCase());
-      if (claim && claim.discord_id !== discordId) {
+      const claims = [
+        this.getVerificationByCharacterId(character.characterId),
+        this.getVerificationByCharName(character.name),
+      ];
+      const other = claims.find((claim) => claim && claim.discord_id !== discordId);
+      if (other) {
         const error = new Error(`${character.name} is already claimed`);
         error.code = "CHAR_CLAIMED";
-        error.claimedBy = claim.discord_id;
+        error.claimedBy = other.discord_id;
         throw error;
       }
+      const own = this.getVerification(discordId);
+      const keptCharacterId =
+        own && own.char_name_lower === character.name.toLowerCase() ? own.character_id : null;
       stmt.upsertVerification.run({
         discord_id: discordId,
         char_name: character.name,
         char_name_lower: character.name.toLowerCase(),
+        character_id: character.characterId ?? keptCharacterId,
         level: character.level ?? null,
         gear_score: character.gearScore ?? null,
         combat_power: character.combatPower ?? null,
@@ -246,12 +277,17 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
         discord_id: discordId,
         char_name: character.name,
         char_name_lower: character.name.toLowerCase(),
+        character_id: character.characterId ?? null,
         level: character.level ?? null,
         gear_score: character.gearScore ?? null,
         combat_power: character.combatPower ?? null,
         legion: character.legion ?? null,
         class_name: character.className ?? null,
       });
+    },
+
+    setCharacterId(discordId, characterId) {
+      return stmt.setCharacterId.run(characterId, discordId).changes > 0;
     },
 
     createReviewCase({ discordId, charName = null, reason, character = null }) {

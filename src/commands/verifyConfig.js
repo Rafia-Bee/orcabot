@@ -12,6 +12,7 @@ const {
 } = require("../verification/config");
 const { COLORS, buildEventEmbed, postLog, unixSeconds } = require("../verification/embeds");
 const { getPauseState } = require("../verification/raid");
+const { SOURCES } = require("../verification/lookup");
 
 const channel = (id) => (id ? `<#${id}>` : "not set");
 const role = (id) => (id ? `<@&${id}>` : "not set");
@@ -96,8 +97,15 @@ function buildSettingsEmbed() {
       },
       { name: "Ticket gear slots", value: cfg.ticketGearSlots.join(", ") },
       {
-        name: "shugo.gg",
-        value: `${cfg.shugo.baseUrl}/${cfg.shugo.regionPath}/<name> · 1 request per ${cfg.shugo.minRequestGapMs} ms`,
+        name: "Character lookups",
+        value: cfg.lookup.sources
+          .map((name, index) => {
+            const source = SOURCES[name];
+            const kind = index === 0 ? "primary" : "backup";
+            const url = decodeURIComponent(source.profileUrl("<name>"));
+            return `${source.label} (${kind}): ${url} · 1 request per ${source.minRequestGapMs()} ms`;
+          })
+          .join("\n"),
       }
     );
 }

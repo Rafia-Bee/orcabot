@@ -53,6 +53,57 @@ test("verification claims", async (t) => {
   });
 });
 
+test("character IDs", async (t) => {
+  const store = openStore(":memory:");
+  t.after(() => store.close());
+
+  await t.test("saves the characterId and finds the claim by it", () => {
+    store.saveVerification({ discordId: "1", character: character("KFC", { characterId: "id-1" }), method: "auto" });
+    assert.equal(store.getVerification("1").character_id, "id-1");
+    assert.equal(store.getVerificationByCharacterId("id-1").discord_id, "1");
+    assert.equal(store.getVerificationForCharacter({ name: "Renamed", characterId: "id-1" }).discord_id, "1");
+    assert.equal(store.getVerificationByCharacterId(null), null);
+  });
+
+  await t.test("a renamed character can't be claimed by another account", () => {
+    assert.throws(
+      () =>
+        store.saveVerification({
+          discordId: "2",
+          character: character("Renamed", { characterId: "id-1" }),
+          method: "auto",
+        }),
+      (error) => error.code === "CHAR_CLAIMED" && error.claimedBy === "1"
+    );
+  });
+
+  await t.test("the owner re-claiming the renamed character keeps one claim", () => {
+    store.saveVerification({ discordId: "1", character: character("Renamed", { characterId: "id-1" }), method: "auto" });
+    assert.equal(store.getVerification("1").char_name, "Renamed");
+    assert.equal(store.getVerificationByCharName("KFC"), null);
+  });
+
+  await t.test("a lookup without an ID keeps the saved one for the same character", () => {
+    store.saveVerification({ discordId: "1", character: character("renamed"), method: "manual" });
+    assert.equal(store.getVerification("1").character_id, "id-1");
+    store.updateClaimDetails("1", character("Renamed", { gearScore: 3000 }));
+    assert.equal(store.getVerification("1").character_id, "id-1");
+    assert.equal(store.getVerification("1").gear_score, 3000);
+  });
+
+  await t.test("switching to another character drops the old ID", () => {
+    store.saveVerification({ discordId: "1", character: character("Alt"), method: "manual" });
+    assert.equal(store.getVerification("1").character_id, null);
+  });
+
+  await t.test("setCharacterId fills in an ID, and IDs are unique", () => {
+    store.saveVerification({ discordId: "3", character: character("Third"), method: "auto" });
+    assert.equal(store.setCharacterId("3", "id-3"), true);
+    assert.equal(store.getVerificationByCharacterId("id-3").discord_id, "3");
+    assert.throws(() => store.setCharacterId("1", "id-3"), /UNIQUE/);
+  });
+});
+
 test("tickets", async (t) => {
   const store = openStore(":memory:");
   t.after(() => store.close());

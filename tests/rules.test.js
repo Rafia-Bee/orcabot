@@ -113,3 +113,22 @@ test("claims", () => {
     "review:account_has_other_claim"
   );
 });
+
+test("a renamed character is still the member's own claim", () => {
+  const ownClaim = { discord_id: "1", char_name: "OldName", character_id: "id-1" };
+  const renamed = found({ name: "dieyoung", characterId: "id-1" });
+  assert.equal(outcome({ ownClaim, lookup: renamed }), "verify:passed");
+  assert.equal(
+    outcome({ ownClaim, lookup: found({ characterId: "id-2" }) }),
+    "review:account_has_other_claim"
+  );
+});
+
+test("matching by ID wins over matching by name", () => {
+  const ownClaim = { discord_id: "1", char_name: "dieyoung", character_id: "id-1" };
+  assert.equal(
+    outcome({ ownClaim, lookup: found({ characterId: "id-2" }) }),
+    "review:account_has_other_claim"
+  );
+  assert.equal(outcome({ ownClaim: { ...ownClaim, character_id: null } }), "verify:passed");
+});

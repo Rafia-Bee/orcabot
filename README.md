@@ -46,7 +46,7 @@ You'll need:
 | `VERIFIED_ROLE_ID` | The role that unlocks the server |
 | `OFFICERS_ROLE_ID` | The role that handles review tickets |
 | `MODERATOR_ROLE_ID` | *(optional)* A second staff role that can also handle tickets and the review channel |
-| `LEGION_ROLES` | *(optional)* Your alliance legions and their roles, like `Aegis:<role id>,SDC:<role id>`. The names must match shugo.gg. |
+| `LEGION_ROLES` | *(optional)* Your alliance legions and their roles, like `Aegis:<role id>,SDC:<role id>`. The names must match the game. |
 | `GUEST_ROLE_ID` | *(optional)* The role for verified members who aren't in one of those legions |
 | `CLASS_ROLES` | *(optional)* Class roles, like `Ranger:<role id>,Chanter:<role id>` (Gladiator, Templar, Assassin, Ranger, Sorcerer, Spiritmaster, Cleric, Chanter) |
 | `VERIFY_CHANNEL_ID` | Where new members click **Verify** |
@@ -55,9 +55,10 @@ You'll need:
 | `REVIEW_TICKETS_CATEGORY_ID` | Category for open review tickets |
 | `ARCHIVED_REVIEW_TICKETS_CATEGORY_ID` | Category closed tickets get moved to |
 | `MEE6_TICKET_PARENT_IDS` | *(optional)* Where MEE6 opens tickets: the channel its ticket threads appear in, or the category its ticket channels go in. When a ticket opens, the bot posts the opener's character, gear and account age in it. |
+| `AION2INDEX_API_KEY` | *(needed for aion2index lookups)* Your API key from the [aion2index community panel](https://aion2index.com/communities/docs). See [Character lookup sites](#character-lookup-sites). |
 | `MEE6_TICKET_RENAMES` | *(optional)* Rename MEE6 tickets by type, like `Force Leader:force,Class Master:master`. If the channel topic MEE6 sets contains the phrase, `0001-name` becomes `force-name`. |
 
-The rest (faction, server, level and gear score requirements, and so on) already have sensible values. It's worth setting `SHUGO_HEALTHCHECK_CHARACTER` to your own character: the bot looks it up on startup and warns you in the log channel if character lookups stop working.
+The rest (faction, server, level and gear score requirements, and so on) already have sensible values. It's worth setting `SHUGO_HEALTHCHECK_CHARACTER` to your own character: the bot looks it up on every lookup site on startup and warns you in the log channel if one of them stops working.
 
 Never share your `.env` file. It's already left out of git.
 
@@ -153,15 +154,48 @@ That's it. Pushes to `main` now deploy automatically (you can watch them in the 
    - **Discord account is too new, or the character's level or gear score is too low (strict verification off):** the bot opens a private ticket with the member and the officers. It asks for an in-game screenshot with a random gear piece taken off. An officer or moderator clicks **Verify**, **Deny** or **Ban**, and the ticket is archived. **Deny** asks for a reason (pre-filled from why the ticket was opened, and you can edit it), then pings the member with "We cannot verify for now because <reason>. If this is your alt, please apply with your main." The member can still read the archived ticket but can't post in it.
    - **Wrong faction or server:** they're turned away.
    - **Typo or unknown name:** they're asked to try again.
-   - **Anything unusual** (the name's already claimed by someone else, or the lookup site is down): it goes to the review channel with **Approve** and **Deny** buttons.
+   - **Anything unusual** (the character's already claimed by someone else, or every lookup site is down): it goes to the review channel with **Approve** and **Deny** buttons.
 3. Along with `Verified`, members get their legion's role (or Guest if their legion isn't in the alliance) and their class role, if `LEGION_ROLES` / `GUEST_ROLE_ID` / `CLASS_ROLES` are set. If someone changes legion or class, run `/recheck-members` (for them or everyone) to update the roles.
-4. Each character can only belong to one Discord account.
+4. Each character can only belong to one Discord account. The bot remembers each character's aion2index ID, so this still holds after a rename, and members who rename their character can verify again with the new name.
 5. Archived tickets are deleted after 7 days without messages.
 6. If a flood of Verify requests comes in at once (a raid), the bot pauses verification for a few minutes and warns the mods. Members are asked to try again shortly.
 
 Members never see how the checks work. All the details go to the mods-only channels.
 
 **Trying it out first:** set `VERIFY_MODE=shadow` in `.env`. The bot then only posts what it *would* do in the log channel and doesn't change anything. Switch to `live` when you're happy.
+
+## Character lookup sites
+
+The bot looks characters up on [aion2index.com](https://aion2index.com) (through its API) and [shugo.gg](https://shugo.gg). `LOOKUP_SOURCES` in `.env` picks the sites and their order:
+
+- `aion2index,shugo`: aion2index first, shugo.gg only when aion2index fails.
+- `shugo,aion2index`: the other way round.
+- `aion2index` or `shugo`: only that site.
+
+When a site fails (down, too slow, or out of date because the game isn't answering), the bot uses the next one for `LOOKUP_FAILOVER_MINUTES` minutes. It posts a note in the log channel when that happens and another when the site works again. Log entries looked up on the backup site show **Source: … (backup)**.
+
+aion2index needs an API key: request access on its [API page](https://aion2index.com/communities/docs) with your Discord account, create the key in your panel, and put it in `AION2INDEX_API_KEY`. If the key stops working, the bot warns in the log channel.
+
+How the sites differ:
+
+- aion2index reads the character from the game on every lookup. shugo.gg can be up to half an hour behind.
+- aion2index gives each character an ID that survives renames. The bot saves it with the member's claim.
+- Only shugo.gg reports gear. With aion2index, review tickets pick the item to unequip from the whole `TICKET_GEAR_SLOTS` list.
+
+### Saving character IDs for existing members
+
+Members verified before aion2index was added have no character ID yet. Run this once to fill them in. It only touches members without an ID, so it's safe to run again:
+
+```bash
+node scripts/backfill-character-ids.js           # shows what it would save
+node scripts/backfill-character-ids.js --write   # saves
+```
+
+On Fly.io: `fly ssh console -C "node scripts/backfill-character-ids.js --write"`.
+
+It lists characters it couldn't find (renamed or deleted; `/recheck-members` sends those to review) and any it skipped because the class, faction or server no longer matches. `/recheck-members` also saves the ID for everyone it checks.
+
+To look a character up by hand: `node scripts/lookup-character.js <name>`. Add `--compare` to see where the two sites disagree, or `--source aion2index` / `--source shugo` to ask one site.
 
 ## Commands
 
@@ -173,7 +207,7 @@ Members never see how the checks work. All the details go to the mods-only chann
 | `/refresh-verify-channel` | Replace the Verify message, e.g. after changing requirements | Manage Server |
 | `/verify-manual` | Verify someone by hand with their character name (also closes their open ticket or review case) | Manage Roles |
 | `/unverify` | Take away someone's Verified role, nickname and character | Manage Roles |
-| `/whois-char` | Post who owns a character, or which character someone has, with their shugo.gg link and account age | Manage Roles |
+| `/whois-char` | Post who owns a character, or which character someone has, with a link to their character page and account age | Manage Roles |
 | `/recheck-members` | Look up verified members' characters again: updates legion and class roles and the gear score in nicknames, and sends anyone renamed, transferred or on the wrong faction to the review channel. Pick a `user` to check one person, or leave it empty for everyone (runs in the background, results in the log channel). | Manage Roles |
 | `/verify-config` | See the settings, turn strict verification on or off, or change the min level, gear score, account age or how long archived tickets are kept | Manage Roles |
 

@@ -86,10 +86,25 @@ async function applyCharacterRoles(member, character) {
 
 const MAX_NICKNAME_LENGTH = 32;
 
-function nicknameFor(charName, character) {
-  const gearScore = character?.gearScore;
-  if (gearScore === undefined || gearScore === null) return charName;
-  const nickname = `${gearScore} - ${charName}`;
+function isForceLeader(member) {
+  const roleId = getConfig().forceLeaderRoleId;
+  return Boolean(roleId && member?.roles.cache.has(roleId));
+}
+
+function shortNumber(value) {
+  if (value >= 1_000_000) return `${Math.floor(value / 100_000) / 10}m`;
+  if (value >= 1_000) return `${Math.floor(value / 1_000)}k`;
+  return String(value);
+}
+
+function nicknameFor(charName, character, member) {
+  const combatPower = character?.combatPower;
+  const parts = [
+    isForceLeader(member) ? "FL" : null,
+    combatPower === undefined || combatPower === null ? null : shortNumber(combatPower),
+    charName,
+  ].filter(Boolean);
+  const nickname = parts.join(" - ");
   return nickname.length <= MAX_NICKNAME_LENGTH ? nickname : charName;
 }
 
@@ -99,7 +114,7 @@ function canRename(member) {
 
 async function applyNickname(member, charName, character) {
   if (!canRename(member)) return ["nickname: member is above the bot's role"];
-  const nickname = nicknameFor(charName, character);
+  const nickname = nicknameFor(charName, character, member);
   if (member.nickname === nickname) return [];
   try {
     await member.setNickname(nickname, "Verified character name");
@@ -181,6 +196,7 @@ async function processGrant(client, grant) {
     legion: claim?.legion ?? null,
     className: claim?.class_name ?? null,
     gearScore: claim?.gear_score ?? null,
+    combatPower: claim?.combat_power ?? null,
   });
   if (problems.length > 0) {
     await postLog(

@@ -183,6 +183,7 @@ function loadConfig() {
     legionRoles: parseLegionRoles(process.env.LEGION_ROLES),
     guestRoleId: process.env.GUEST_ROLE_ID?.trim() || null,
     classRoles: parseClassRoles(process.env.CLASS_ROLES),
+    forceLeaderRoleId: process.env.FORCE_LEADER_ROLE_ID?.trim() || null,
     mee6TicketParentIds: (process.env.MEE6_TICKET_PARENT_IDS ?? "")
       .split(",")
       .map((id) => id.trim())

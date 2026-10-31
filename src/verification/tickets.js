@@ -171,6 +171,7 @@ function isStaff(member) {
 
 async function askConfirmation(interaction, ticket, action) {
   const name = escapeMarkdown(ticket.char_name);
+  const member = await interaction.guild.members.fetch(ticket.discord_id).catch(() => null);
   const isBan = action === "ban";
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -185,7 +186,7 @@ async function askConfirmation(interaction, ticket, action) {
   return interaction.reply({
     content: isBan
       ? `Ban <@${ticket.discord_id}> (**${name}**) from the server?`
-      : `Verify <@${ticket.discord_id}>? They'll get the Verified role and the nickname **${escapeMarkdown(nicknameFor(ticket.char_name, ticket.character))}**.`,
+      : `Verify <@${ticket.discord_id}>? They'll get the Verified role and the nickname **${escapeMarkdown(nicknameFor(ticket.char_name, ticket.character, member))}**.`,
     components: [row],
     flags: MessageFlags.Ephemeral,
     allowedMentions: { parse: [] },

@@ -189,6 +189,12 @@ function loadConfig() {
       .map((id) => id.trim())
       .filter(Boolean),
     mee6TicketRenames: parseTicketRenames(process.env.MEE6_TICKET_RENAMES),
+    roster: {
+      forceVcCategoryId: process.env.FORCE_VC_CATEGORY_ID?.trim() || null,
+      channelId: process.env.ROSTER_CHANNEL_ID?.trim() || null,
+      generalChannelId: process.env.ROSTER_GENERAL_CHANNEL_ID?.trim() || null,
+      raidHelperApiKey: process.env.RAID_HELPER_API_KEY?.trim() || null,
+    },
     ...requirements,
     lookup,
     shugo,

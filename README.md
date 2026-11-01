@@ -57,6 +57,11 @@ You'll need:
 | `MEE6_TICKET_PARENT_IDS` | *(optional)* Where MEE6 opens tickets: the channel its ticket threads appear in, or the category its ticket channels go in. When a ticket opens, the bot posts the opener's character, gear and account age in it. |
 | `AION2INDEX_API_KEY` | *(needed for aion2index lookups)* Your API key from the [aion2index community panel](https://aion2index.com/communities/docs). See [Character lookup sites](#character-lookup-sites). |
 | `MEE6_TICKET_RENAMES` | *(optional)* Rename MEE6 tickets by type, like `Force Leader:force,Class Master:master`. If the channel topic MEE6 sets contains the phrase, `0001-name` becomes `force-name`. |
+| `FORCE_LEADER_ROLE_ID` | *(optional)* The Force Leader role. Gives the `FL - <combat power> - <name>` nickname, and `/announce-roster` uses it to find each force's leader. |
+| `FORCE_VC_CATEGORY_ID` | *(needed for force rosters)* The category with the force voice channels. See [Force rosters](#force-rosters). |
+| `ROSTER_CHANNEL_ID` | *(needed for force rosters)* Where `/announce-roster` posts each force's pings |
+| `ROSTER_GENERAL_CHANNEL_ID` | *(optional)* The channel members are told to ping their Force Leader in when they can't make it |
+| `RAID_HELPER_API_KEY` | *(optional)* Your raid-helper API key (`/apikey`). Comps load without it. |
 
 The rest (faction, server, level and gear score requirements, and so on) already have sensible values. It's worth setting `SHUGO_HEALTHCHECK_CHARACTER` to your own character: the bot looks it up on every lookup site on startup and warns you in the log channel if one of them stops working.
 
@@ -197,7 +202,33 @@ It lists characters it couldn't find (renamed or deleted; `/recheck-members` sen
 
 To look a character up by hand: `node scripts/lookup-character.js <name>`. Add `--compare` to see where the two sites disagree, or `--source aion2index` / `--source shugo` to ask one site.
 
+## Force rosters
+
+Force voice channels are hidden by default, so people who join the server can't sit in one and listen to the shotcalls. After the Force Leaders finish the comp on raid-helper, `/announce-roster` opens each force's voice channel to that force's members only.
+
+**Setting up the category:** in the force category, deny **View Channel** for `@everyone` and `Verified`, and allow it for the Force Leader, officer and moderator roles. Keep the voice channels synced to the category. Name each voice channel like its raid-helper divider (`Force 1`, `Force 2`…). Capitals, symbols, emoji and notes in brackets are ignored, so the divider `Force 2 (Backline)` matches the channel `🔊 Force 2`. The bot needs Manage Permissions, View Channel and Connect in the category.
+
+**`/announce-roster comp:<ID or link>`**
+
+1. The bot loads the comp from raid-helper. Each divider is a force, and the groups below it, up to the next divider, are its parties.
+2. It shows you a private preview of each force: its voice channel, its Force Leader (the force member with the Force Leader role, from the top group and slot down), how many members get access, and who's skipped. Members are skipped when they aren't in the server, don't have `Verified`, or already have a place in another force. Nothing changes until you press **Post roster** (the preview expires after 15 minutes).
+3. When you press **Post roster**:
+   - Each force's voice channel gets View Channel and Connect for that force's members only. Every other member permission on the force channels is removed, and voice channels with no force are closed to members. Role permissions aren't touched.
+   - For each force, it posts in the roster channel: *Join #Force 1 and whisper @Leader (**CharName**) in game to get invited to your force. If you can't make it, please ping @Leader to let them know in #general.* followed by pings for the force's members.
+   - A summary goes to the log channel.
+
+Running it again (say, after the comp changed) replaces the access with the new comp.
+
+**`/reset-force-vcs`** after the event removes every member permission from the force voice channels, so they're back to roles only.
+
 ## Commands
+
+### Events
+
+| Command | What it does | Who can use it |
+| --- | --- | --- |
+| `/announce-roster` | Open each force's voice channel to its members from a raid-helper comp and ping them in the roster channel | Manage Channels |
+| `/reset-force-vcs` | Remove all member access from the force voice channels | Manage Channels |
 
 ### Verification
 

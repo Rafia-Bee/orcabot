@@ -66,6 +66,11 @@ CREATE TABLE IF NOT EXISTS cooldowns (
   discord_id       TEXT PRIMARY KEY,
   next_allowed_at  INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS bot_state (
+  key              TEXT PRIMARY KEY,
+  value            TEXT NOT NULL
+);
 `;
 
 function parseJson(text) {
@@ -207,6 +212,12 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
       ON CONFLICT (discord_id) DO UPDATE SET next_allowed_at = excluded.next_allowed_at
     `),
     pruneCooldowns: db.prepare("DELETE FROM cooldowns WHERE next_allowed_at <= ?"),
+
+    state: db.prepare("SELECT value FROM bot_state WHERE key = ?"),
+    setState: db.prepare(`
+      INSERT INTO bot_state (key, value) VALUES (?, ?)
+      ON CONFLICT (key) DO UPDATE SET value = excluded.value
+    `),
   };
 
   return {
@@ -388,6 +399,14 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
 
     pruneCooldowns(now = Date.now()) {
       stmt.pruneCooldowns.run(now);
+    },
+
+    getState(key) {
+      return stmt.state.get(key)?.value ?? null;
+    },
+
+    setState(key, value) {
+      stmt.setState.run(key, String(value));
     },
   };
 }

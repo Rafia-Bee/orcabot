@@ -197,3 +197,19 @@ test("cooldowns", () => {
   assert.equal(store.getCooldownRemaining("1"), 0);
   store.close();
 });
+
+test("bot state", async (t) => {
+  const store = openStore(":memory:");
+  t.after(() => store.close());
+
+  await t.test("returns null for an unknown key", () => {
+    assert.equal(store.getState("missing"), null);
+  });
+
+  await t.test("saves and overwrites a value as text", () => {
+    store.setState("recheck_ms_per_member", 3750);
+    assert.equal(store.getState("recheck_ms_per_member"), "3750");
+    store.setState("recheck_ms_per_member", 2100);
+    assert.equal(store.getState("recheck_ms_per_member"), "2100");
+  });
+});

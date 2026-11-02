@@ -1,7 +1,7 @@
 const { escapeMarkdown } = require("discord.js");
 const { getConfig } = require("./config");
 const { getStore } = require("./store");
-const { lookupCharacter } = require("./lookup");
+const { lookupCharacter, primarySource } = require("./lookup");
 const { applyCharacterRoles, applyNickname, canRename } = require("./access");
 const { openReviewCase } = require("./review");
 const { isSameCharacter } = require("./rules");
@@ -9,6 +9,7 @@ const { COLORS, buildEventEmbed, postLog } = require("./embeds");
 
 const MAX_CONSECUTIVE_FAILURES = 5;
 const MAX_LIST_LINES = 15;
+const MS_PER_MEMBER_KEY = "recheck_ms_per_member";
 
 let running = null;
 
@@ -146,6 +147,9 @@ async function runFullRecheck(client, guild, startedBy) {
         break;
       }
     }
+    if (!aborted && results.length > 0) {
+      getStore().setState(MS_PER_MEMBER_KEY, Math.round((Date.now() - running.startedAt) / results.length));
+    }
     await postLog(
       client,
       buildSummary(results, { total: claims.length, startedAt: running.startedAt, startedBy, aborted })
@@ -153,6 +157,15 @@ async function runFullRecheck(client, guild, startedBy) {
   } finally {
     running = null;
   }
+}
+
+function estimateRecheck(total) {
+  const measured = Number(getStore().getState(MS_PER_MEMBER_KEY)) || null;
+  const msPerMember = measured ?? primarySource().minRequestGapMs();
+  return {
+    minutes: Math.max(1, Math.ceil((total * msPerMember) / 60_000)),
+    measured: measured !== null,
+  };
 }
 
 function msUntil(time) {
@@ -190,4 +203,4 @@ function scheduleDailyRecheck(client) {
   dailyTimer = setTimeout(run, msUntil(time));
 }
 
-module.exports = { recheckClaim, runFullRecheck, getRunningRecheck, scheduleDailyRecheck };
+module.exports = { recheckClaim, runFullRecheck, getRunningRecheck, estimateRecheck, scheduleDailyRecheck };

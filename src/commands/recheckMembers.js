@@ -7,11 +7,11 @@ const {
 const { getConfig } = require("../verification/config");
 const { getStore } = require("../verification/store");
 const { reasonText } = require("../verification/embeds");
-const { primarySource } = require("../verification/lookup");
 const {
   recheckClaim,
   runFullRecheck,
   getRunningRecheck,
+  estimateRecheck,
 } = require("../verification/recheck");
 
 function describeOne(result) {
@@ -87,13 +87,15 @@ module.exports = {
       return interaction.editReply("No verified members have a claimed character yet.");
     }
 
-    const minutes = Math.max(1, Math.ceil((total * primarySource().minRequestGapMs()) / 60_000));
+    const { minutes, measured } = estimateRecheck(total);
     runFullRecheck(interaction.client, interaction.guild, interaction.user.id).catch((error) =>
       console.error("Member re-check failed:", error)
     );
     return interaction.editReply(
       `Re-checking ${total} verified member${total === 1 ? "" : "s"} in the background. ` +
-        `This takes about ${minutes} min. The results will be posted in <#${getConfig().logChannelId}>.`
+        `This takes ${measured ? "about" : "at least"} ${minutes} min` +
+        `${measured ? " (based on the last full re-check)" : ""}. ` +
+        `The results will be posted in <#${getConfig().logChannelId}>.`
     );
   },
 };

@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { parseCompId, buildForces, channelKey, rosterMessages } = require("../src/roster/comp");
+const { parseRaidHelperId, buildForces, channelKey, rosterMessages } = require("../src/roster/comp");
 
 const groups = Array.from({ length: 12 }, (_, i) => ({
   name: `Group ${i + 1}`,
@@ -51,10 +51,10 @@ test("groups above the first divider are unassigned", () => {
 });
 
 test("comp IDs come from plain IDs and links", () => {
-  assert.equal(parseCompId("1565489833873383515"), "1565489833873383515");
-  assert.equal(parseCompId("https://raid-helper.xyz/comp/1565489833873383515"), "1565489833873383515");
-  assert.equal(parseCompId(" 1565489833873383515 "), "1565489833873383515");
-  assert.equal(parseCompId("force 1"), null);
+  assert.equal(parseRaidHelperId("1565489833873383515"), "1565489833873383515");
+  assert.equal(parseRaidHelperId("https://raid-helper.xyz/comp/1565489833873383515"), "1565489833873383515");
+  assert.equal(parseRaidHelperId(" 1565489833873383515 "), "1565489833873383515");
+  assert.equal(parseRaidHelperId("force 1"), null);
 });
 
 test("voice channel names match ignoring case, symbols and bracketed notes", () => {

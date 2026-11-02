@@ -11,7 +11,7 @@ const {
 } = require("discord.js");
 const { getConfig } = require("../verification/config");
 const { COLORS, buildEventEmbed, postLog } = require("../verification/embeds");
-const { parseCompId, fetchComp } = require("../roster/comp");
+const { parseRaidHelperId, fetchComp } = require("../roster/comp");
 const { planRoster, applyRoster } = require("../roster/forceVcs");
 
 const PREFIX = "roster";
@@ -162,7 +162,7 @@ module.exports = {
         flags: MessageFlags.Ephemeral,
       });
     }
-    const compId = parseCompId(interaction.options.getString("comp"));
+    const compId = parseRaidHelperId(interaction.options.getString("comp"));
     if (!compId) {
       return interaction.reply({
         content: "That doesn't look like a raid-helper comp ID or link.",

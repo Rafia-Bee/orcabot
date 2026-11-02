@@ -70,8 +70,8 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
 
-  // Handle button and modal interactions
-  if (interaction.isButton() || interaction.isModalSubmit()) {
+  // Handle button, select menu and modal interactions
+  if (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) {
     const handler = client.componentHandlers.get(
       interaction.customId.split(":")[0]
     );

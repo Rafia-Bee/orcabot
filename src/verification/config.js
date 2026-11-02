@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { isValidTimeZone } = require("../time");
 
 function intFromEnv(key, fallback) {
   const raw = process.env[key];
@@ -163,6 +164,23 @@ function loadConfig() {
     throw new Error(`DAILY_RECHECK_TIME must look like HH:MM (24-hour), got "${rawRecheckTime}"`);
   }
 
+  const timeZone = process.env.TIMEZONE?.trim() || "Europe/Helsinki";
+  if (!isValidTimeZone(timeZone)) {
+    throw new Error(`TIMEZONE must be a time zone name like Europe/Berlin, got "${timeZone}"`);
+  }
+  const timeFromEnv = (key, fallback) => {
+    const raw = process.env[key]?.trim() || fallback;
+    const time = parseTime(raw);
+    if (!time) throw new Error(`${key} must look like HH:MM (24-hour), got "${raw}"`);
+    return time;
+  };
+  const timeslots = {
+    first: timeFromEnv("FIRST_TIMESLOT", "10:00"),
+    last: timeFromEnv("LAST_TIMESLOT", "17:00"),
+    durationMinutes: intFromEnv("TIMESLOT_DURATION", 20),
+  };
+  if (timeslots.durationMinutes < 1) throw new Error("TIMESLOT_DURATION must be at least 1");
+
   const mode = (process.env.VERIFY_MODE || "shadow").trim();
   if (!["shadow", "live"].includes(mode)) {
     throw new Error(`VERIFY_MODE must be "shadow" or "live", got "${mode}"`);
@@ -212,6 +230,8 @@ function loadConfig() {
     shugo,
     aion2index,
     dailyRecheckTime,
+    timeZone,
+    timeslots,
     submitCooldownSeconds: intFromEnv("VERIFY_COOLDOWN_SECONDS", 60),
     raid: {
       submissionsThreshold: intFromEnv("RAID_SUBMISSIONS_THRESHOLD", 20),
@@ -251,7 +271,10 @@ const EDITABLE_SETTINGS = {
   MIN_GS: { label: "Min gear score", min: 0, max: 100000, unit: "" },
   MIN_ACCOUNT_AGE_DAYS: { label: "Min account age", min: 0, max: 3650, unit: " days" },
   ARCHIVED_TICKET_RETENTION_DAYS: { label: "Archived tickets kept", min: 1, max: 365, unit: " days" },
-  DAILY_RECHECK_TIME: { label: "Daily re-check time", type: "time" },
+  DAILY_RECHECK_TIME: { label: "Daily re-check time", type: "time", optional: true },
+  FIRST_TIMESLOT: { label: "First timeslot", type: "time" },
+  LAST_TIMESLOT: { label: "Last timeslot ends", type: "time" },
+  TIMESLOT_DURATION: { label: "Timeslot length", min: 5, max: 180, unit: " min" },
 };
 
 function updateSetting(key, value) {
@@ -260,8 +283,9 @@ function updateSetting(key, value) {
   if (setting.type === "bool") {
     if (typeof value !== "boolean") throw new Error(`${setting.label} must be true or false`);
   } else if (setting.type === "time") {
-    if (value !== "" && parseTime(value) !== value) {
-      throw new Error(`${setting.label} must be a 24-hour time like 04:00, or off`);
+    const valid = value === "" ? setting.optional : parseTime(value) === value;
+    if (!valid) {
+      throw new Error(`${setting.label} must be a 24-hour time like 04:00${setting.optional ? ", or off" : ""}`);
     }
   } else if (!Number.isInteger(value) || value < setting.min || value > setting.max) {
     throw new Error(`${setting.label} must be a whole number from ${setting.min} to ${setting.max}`);

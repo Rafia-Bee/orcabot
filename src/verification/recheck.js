@@ -2,6 +2,7 @@ const { escapeMarkdown } = require("discord.js");
 const { getConfig } = require("./config");
 const { getStore } = require("./store");
 const { lookupCharacter, primarySource } = require("./lookup");
+const { nextOccurrence } = require("../time");
 const { applyCharacterRoles, applyNickname, canRename } = require("./access");
 const { openReviewCase } = require("./review");
 const { isSameCharacter } = require("./rules");
@@ -175,13 +176,9 @@ function estimateRecheck(total) {
   };
 }
 
-function msUntil(time) {
-  const [hours, minutes] = time.split(":").map(Number);
-  const now = new Date();
-  const next = new Date(now);
-  next.setHours(hours, minutes, 0, 0);
-  if (next <= now) next.setDate(next.getDate() + 1);
-  return next - now;
+function msUntil(time, timeZone) {
+  const now = Date.now();
+  return nextOccurrence(time, timeZone, now) - now;
 }
 
 let dailyTimer = null;
@@ -189,15 +186,15 @@ let dailyTimer = null;
 function scheduleDailyRecheck(client) {
   clearTimeout(dailyTimer);
   dailyTimer = null;
-  const time = getConfig().dailyRecheckTime;
+  const { dailyRecheckTime: time, timeZone } = getConfig();
   if (!time) {
     console.log("Daily member re-check: off (DAILY_RECHECK_TIME not set)");
     return;
   }
-  console.log(`Daily member re-check: every day at ${time}`);
+  console.log(`Daily member re-check: every day at ${time} (${timeZone})`);
 
   const run = async () => {
-    dailyTimer = setTimeout(run, msUntil(time));
+    dailyTimer = setTimeout(run, msUntil(time, timeZone));
     try {
       if (running) return;
       if (getStore().getAllVerifications().length === 0) return;
@@ -207,7 +204,7 @@ function scheduleDailyRecheck(client) {
       console.error("Daily member re-check failed:", error);
     }
   };
-  dailyTimer = setTimeout(run, msUntil(time));
+  dailyTimer = setTimeout(run, msUntil(time, timeZone));
 }
 
 module.exports = { recheckClaim, runFullRecheck, getRunningRecheck, estimateRecheck, scheduleDailyRecheck };

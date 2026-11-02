@@ -1,22 +1,30 @@
 const { escapeMarkdown } = require("discord.js");
 
-const COMP_API_BASE = "https://raid-helper.xyz/api/v4/comps";
+const RAID_HELPER_API_BASE = "https://raid-helper.xyz/api/v4";
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_MESSAGE_LENGTH = 2000;
 
-function parseCompId(input) {
+function parseRaidHelperId(input) {
   const ids = String(input ?? "").match(/\d{15,22}/g);
   return ids ? ids[ids.length - 1] : null;
 }
 
-async function fetchComp(compId, { apiKey = null, userAgent = null } = {}) {
+function fetchComp(compId, options) {
+  return fetchRaidHelper(`comps/${compId}`, options);
+}
+
+function fetchEvent(eventId, options) {
+  return fetchRaidHelper(`events/${eventId}`, options);
+}
+
+async function fetchRaidHelper(path, { apiKey = null, userAgent = null } = {}) {
   const headers = { Accept: "application/json" };
   if (apiKey) headers.Authorization = apiKey;
   if (userAgent) headers["User-Agent"] = userAgent;
 
   let response;
   try {
-    response = await fetch(`${COMP_API_BASE}/${compId}`, {
+    response = await fetch(`${RAID_HELPER_API_BASE}/${path}`, {
       headers,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -92,4 +100,4 @@ function rosterMessages({ voiceChannelId, leaderId, leaderCharName, generalChann
   return messages;
 }
 
-module.exports = { parseCompId, fetchComp, buildForces, channelKey, rosterMessages };
+module.exports = { parseRaidHelperId, fetchComp, fetchEvent, buildForces, channelKey, rosterMessages };

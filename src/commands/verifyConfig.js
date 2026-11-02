@@ -27,9 +27,11 @@ function parseValue(setting, raw) {
     throw new Error(`${setting.label} must be true or false.`);
   }
   if (setting.type === "time") {
-    if (/^(off|none)$/i.test(raw)) return "";
+    if (setting.optional && /^(off|none)$/i.test(raw)) return "";
     const time = parseTime(raw);
-    if (!time) throw new Error(`${setting.label} must be a 24-hour time like 04:00, or off.`);
+    if (!time) {
+      throw new Error(`${setting.label} must be a 24-hour time like 04:00${setting.optional ? ", or off" : ""}.`);
+    }
     return time;
   }
   if (!/^\d+$/.test(raw)) {
@@ -46,9 +48,8 @@ function buildSettingsEmbed() {
     .setColor(COLORS.blue)
     .setTitle("Verification settings")
     .setDescription(
-      "Change strict verification, min level, min gear score, min account age, archived ticket retention " +
-        "or the daily re-check time " +
-        "with `/verify-config setting value`. Everything else: edit .env and restart the bot." +
+      "Change the settings in the `setting` list with `/verify-config setting value`. " +
+        "Everything else: edit .env and restart the bot." +
         (missing.length ? `\n\n**Missing:** ${missing.join(", ")}` : "")
     )
     .addFields(
@@ -79,6 +80,12 @@ function buildSettingsEmbed() {
       {
         name: "Daily re-check",
         value: cfg.dailyRecheckTime ? `every day at ${cfg.dailyRecheckTime}` : "off",
+        inline: true,
+      },
+      { name: "Time zone", value: cfg.timeZone, inline: true },
+      {
+        name: "Comp timeslots",
+        value: `${cfg.timeslots.first}–${cfg.timeslots.last}, ${cfg.timeslots.durationMinutes} min each`,
         inline: true,
       },
       { name: "Verified role", value: role(cfg.verifiedRoleId), inline: true },
@@ -140,7 +147,7 @@ module.exports = {
     .addStringOption((option) =>
       option
         .setName("value")
-        .setDescription("New value: a number, true/false for strict verification, or HH:MM/off for the re-check time")
+        .setDescription("New value: a number, true/false, or a time like 09:00 (off turns the daily re-check off)")
         .setMaxLength(10)
     ),
   async execute(interaction) {
@@ -177,7 +184,7 @@ module.exports = {
     if (key === "DAILY_RECHECK_TIME") scheduleDailyRecheck(interaction.client);
 
     const unit = setting.unit ?? "";
-    const show = (value) => (value ? `${value}${unit}` : setting.type === "time" ? "off" : "unset");
+    const show = (value) => (value ? `${value}${unit}` : setting.optional ? "off" : "unset");
     const from = show(change.previous);
     const to = show(change.current);
     await postLog(

@@ -21,6 +21,10 @@ function same(a, b) {
   return String(a ?? "").toLowerCase() === String(b ?? "").toLowerCase();
 }
 
+function formatNumber(value) {
+  return value == null ? "?" : value.toLocaleString("en-US");
+}
+
 async function recheckClaim(client, guild, claim) {
   const cfg = getConfig();
   const store = getStore();
@@ -56,15 +60,18 @@ async function recheckClaim(client, guild, claim) {
   }
 
   const changes = [];
-  if (!same(claim.legion, character.legion)) {
-    changes.push(`legion ${claim.legion ?? "none"} → ${character.legion ?? "none"}`);
+  if (claim.char_name !== character.name) {
+    changes.push(`name ${claim.char_name} → ${character.name}`);
   }
-  if (!same(claim.class_name, character.className)) {
-    changes.push(`class ${claim.class_name ?? "none"} → ${character.className ?? "none"}`);
+  if (claim.gear_score !== (character.gearScore ?? null)) {
+    changes.push(`item level ${formatNumber(claim.gear_score)} → ${formatNumber(character.gearScore)}`);
+  }
+  if (claim.combat_power !== (character.combatPower ?? null)) {
+    changes.push(`combat power ${formatNumber(claim.combat_power)} → ${formatNumber(character.combatPower)}`);
   }
   store.updateClaimDetails(claim.discord_id, character);
   const problems = await applyCharacterRoles(member, character);
-  if (canRename(member)) problems.push(...(await applyNickname(member, claim.char_name, character)));
+  if (canRename(member)) problems.push(...(await applyNickname(member, character.name, character)));
 
   return { status: changes.length ? "updated" : "unchanged", claim, changes, problems };
 }

@@ -155,4 +155,39 @@ async function runFullRecheck(client, guild, startedBy) {
   }
 }
 
-module.exports = { recheckClaim, runFullRecheck, getRunningRecheck };
+function msUntil(time) {
+  const [hours, minutes] = time.split(":").map(Number);
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(hours, minutes, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  return next - now;
+}
+
+let dailyTimer = null;
+
+function scheduleDailyRecheck(client) {
+  clearTimeout(dailyTimer);
+  dailyTimer = null;
+  const time = getConfig().dailyRecheckTime;
+  if (!time) {
+    console.log("Daily member re-check: off (DAILY_RECHECK_TIME not set)");
+    return;
+  }
+  console.log(`Daily member re-check: every day at ${time}`);
+
+  const run = async () => {
+    dailyTimer = setTimeout(run, msUntil(time));
+    try {
+      if (running) return;
+      if (getStore().getAllVerifications().length === 0) return;
+      const channel = await client.channels.fetch(getConfig().logChannelId);
+      await runFullRecheck(client, channel.guild, client.user.id);
+    } catch (error) {
+      console.error("Daily member re-check failed:", error);
+    }
+  };
+  dailyTimer = setTimeout(run, msUntil(time));
+}
+
+module.exports = { recheckClaim, runFullRecheck, getRunningRecheck, scheduleDailyRecheck };

@@ -90,6 +90,12 @@ function parseTicketRenames(raw) {
     });
 }
 
+function parseTime(raw) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(raw);
+  if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) return null;
+  return `${match[1].padStart(2, "0")}:${match[2]}`;
+}
+
 const LOOKUP_SOURCE_NAMES = ["aion2index", "shugo"];
 
 function parseLookupSources(raw) {
@@ -151,6 +157,12 @@ function loadConfig() {
   }
   if (lookup.failoverMinutes < 0) throw new Error("LOOKUP_FAILOVER_MINUTES must be >= 0");
 
+  const rawRecheckTime = process.env.DAILY_RECHECK_TIME?.trim() || null;
+  const dailyRecheckTime = rawRecheckTime && parseTime(rawRecheckTime);
+  if (rawRecheckTime && !dailyRecheckTime) {
+    throw new Error(`DAILY_RECHECK_TIME must look like HH:MM (24-hour), got "${rawRecheckTime}"`);
+  }
+
   const mode = (process.env.VERIFY_MODE || "shadow").trim();
   if (!["shadow", "live"].includes(mode)) {
     throw new Error(`VERIFY_MODE must be "shadow" or "live", got "${mode}"`);
@@ -199,6 +211,7 @@ function loadConfig() {
     lookup,
     shugo,
     aion2index,
+    dailyRecheckTime,
     submitCooldownSeconds: intFromEnv("VERIFY_COOLDOWN_SECONDS", 60),
     raid: {
       submissionsThreshold: intFromEnv("RAID_SUBMISSIONS_THRESHOLD", 20),
@@ -238,6 +251,7 @@ const EDITABLE_SETTINGS = {
   MIN_GS: { label: "Min gear score", min: 0, max: 100000, unit: "" },
   MIN_ACCOUNT_AGE_DAYS: { label: "Min account age", min: 0, max: 3650, unit: " days" },
   ARCHIVED_TICKET_RETENTION_DAYS: { label: "Archived tickets kept", min: 1, max: 365, unit: " days" },
+  DAILY_RECHECK_TIME: { label: "Daily re-check time", type: "time" },
 };
 
 function updateSetting(key, value) {
@@ -245,6 +259,10 @@ function updateSetting(key, value) {
   if (!setting) throw new Error(`${key} can't be changed from Discord`);
   if (setting.type === "bool") {
     if (typeof value !== "boolean") throw new Error(`${setting.label} must be true or false`);
+  } else if (setting.type === "time") {
+    if (value !== "" && parseTime(value) !== value) {
+      throw new Error(`${setting.label} must be a 24-hour time like 04:00, or off`);
+    }
   } else if (!Number.isInteger(value) || value < setting.min || value > setting.max) {
     throw new Error(`${setting.label} must be a whole number from ${setting.min} to ${setting.max}`);
   }
@@ -269,6 +287,7 @@ module.exports = {
   parseLegionRoles,
   parseClassRoles,
   parseLookupSources,
+  parseTime,
   EDITABLE_SETTINGS,
   updateSetting,
 };

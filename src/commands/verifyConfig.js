@@ -9,7 +9,9 @@ const {
   missingKeys,
   EDITABLE_SETTINGS,
   updateSetting,
+  parseTime,
 } = require("../verification/config");
+const { scheduleDailyRecheck } = require("../verification/recheck");
 const { COLORS, buildEventEmbed, postLog, unixSeconds } = require("../verification/embeds");
 const { getPauseState } = require("../verification/raid");
 const { SOURCES } = require("../verification/lookup");
@@ -23,6 +25,12 @@ function parseValue(setting, raw) {
     if (/^(true|on|yes|1)$/i.test(raw)) return true;
     if (/^(false|off|no|0)$/i.test(raw)) return false;
     throw new Error(`${setting.label} must be true or false.`);
+  }
+  if (setting.type === "time") {
+    if (/^(off|none)$/i.test(raw)) return "";
+    const time = parseTime(raw);
+    if (!time) throw new Error(`${setting.label} must be a 24-hour time like 04:00, or off.`);
+    return time;
   }
   if (!/^\d+$/.test(raw)) {
     throw new Error(`${setting.label} must be a whole number from ${setting.min} to ${setting.max}.`);
@@ -38,7 +46,8 @@ function buildSettingsEmbed() {
     .setColor(COLORS.blue)
     .setTitle("Verification settings")
     .setDescription(
-      "Change strict verification, min level, min gear score, min account age or archived ticket retention " +
+      "Change strict verification, min level, min gear score, min account age, archived ticket retention " +
+        "or the daily re-check time " +
         "with `/verify-config setting value`. Everything else: edit .env and restart the bot." +
         (missing.length ? `\n\n**Missing:** ${missing.join(", ")}` : "")
     )
@@ -65,6 +74,11 @@ function buildSettingsEmbed() {
       {
         name: "Archived tickets kept",
         value: `${cfg.archivedTicketRetentionDays} days`,
+        inline: true,
+      },
+      {
+        name: "Daily re-check",
+        value: cfg.dailyRecheckTime ? `every day at ${cfg.dailyRecheckTime}` : "off",
         inline: true,
       },
       { name: "Verified role", value: role(cfg.verifiedRoleId), inline: true },
@@ -126,7 +140,7 @@ module.exports = {
     .addStringOption((option) =>
       option
         .setName("value")
-        .setDescription("New value: a number, or true/false for strict verification")
+        .setDescription("New value: a number, true/false for strict verification, or HH:MM/off for the re-check time")
         .setMaxLength(10)
     ),
   async execute(interaction) {
@@ -160,9 +174,12 @@ module.exports = {
       return interaction.reply({ content: error.message, flags: MessageFlags.Ephemeral });
     }
 
+    if (key === "DAILY_RECHECK_TIME") scheduleDailyRecheck(interaction.client);
+
     const unit = setting.unit ?? "";
-    const from = `${change.previous ?? "unset"}${unit}`;
-    const to = `${change.current}${unit}`;
+    const show = (value) => (value ? `${value}${unit}` : setting.type === "time" ? "off" : "unset");
+    const from = show(change.previous);
+    const to = show(change.current);
     await postLog(
       interaction.client,
       buildEventEmbed({

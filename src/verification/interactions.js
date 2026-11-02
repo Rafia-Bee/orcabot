@@ -25,6 +25,7 @@ const {
 } = require("./embeds");
 const { randomGrantDelayMs, startGrantSweeper } = require("./access");
 const { watchMee6Tickets } = require("./mee6Tickets");
+const { scheduleDailyRecheck } = require("./recheck");
 const { openReviewCase, isReviewButton, handleReviewButton } = require("./review");
 const {
   openTicket,
@@ -388,6 +389,7 @@ function onReady(client) {
   startGrantSweeper(client);
   startArchiveCleanup(client);
   startCooldownPruning();
+  scheduleDailyRecheck(client);
   watchMee6Tickets(client);
   watchLookupSources(client);
   console.log(`Character lookups: ${cfg.lookup.sources.join(" → ")}`);

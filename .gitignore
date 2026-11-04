@@ -4,3 +4,6 @@ node_modules/
 members-with-role
 docs/
 data/
+tools/
+server.env
+orcabot-copy.db*

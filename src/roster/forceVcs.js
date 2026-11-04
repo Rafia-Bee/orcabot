@@ -178,6 +178,7 @@ async function applyRoster(guild, plan, actor) {
         leaderCharName: force.leaderCharName,
         generalChannelId: cfg.roster.generalChannelId,
         memberIds: pinged,
+        divided: result.posted > 0,
       });
       try {
         for (const content of messages) {

@@ -73,9 +73,14 @@ test("roster message names the VC, the leader and pings the members", () => {
   });
   assert.equal(
     message,
-    "Join <#900> and whisper <@1> (**Xia**) in game to get invited to your force. " +
+    "### Join <#900> and whisper <@1> (**Xia**) in game to get invited to your force. " +
       "If you can't make it, please ping <@1> to let them know in <#800>.\n<@2> <@4>"
   );
+});
+
+test("roster message after the first force starts with a divider", () => {
+  const [message] = rosterMessages({ voiceChannelId: "900", leaderId: "1", memberIds: ["2"], divided: true });
+  assert.match(message, /^--------------\n### Join <#900>/);
 });
 
 test("roster message without a leader or general channel still reads", () => {

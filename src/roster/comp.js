@@ -3,6 +3,7 @@ const { escapeMarkdown } = require("discord.js");
 const RAID_HELPER_API_BASE = "https://raid-helper.xyz/api/v4";
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_MESSAGE_LENGTH = 2000;
+const FORCE_DIVIDER = "--------------";
 
 function parseRaidHelperId(input) {
   const ids = String(input ?? "").match(/\d{15,22}/g);
@@ -77,12 +78,13 @@ function channelKey(name) {
     .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
-function rosterMessages({ voiceChannelId, leaderId, leaderCharName, generalChannelId, memberIds }) {
+function rosterMessages({ voiceChannelId, leaderId, leaderCharName, generalChannelId, memberIds, divided = false }) {
   const leader = leaderId ? `<@${leaderId}>` : "your force leader";
   const whisper = leaderId && leaderCharName ? `${leader} (**${escapeMarkdown(leaderCharName)}**)` : leader;
   const general = generalChannelId ? `<#${generalChannelId}>` : "#general";
   const head =
-    `Join <#${voiceChannelId}> and whisper ${whisper} in game to get invited to your force. ` +
+    (divided ? `${FORCE_DIVIDER}\n` : "") +
+    `### Join <#${voiceChannelId}> and whisper ${whisper} in game to get invited to your force. ` +
     `If you can't make it, please ping ${leader} to let them know in ${general}.`;
 
   const messages = [];

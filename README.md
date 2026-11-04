@@ -214,7 +214,7 @@ Force voice channels are hidden by default, so people who join the server can't 
 2. It shows you a private preview of each force: its voice channel, its Force Leader (the force member with the Force Leader role, from the top group and slot down), how many members get access, and who's skipped. Members are skipped when they aren't in the server, don't have `Verified`, or already have a place in another force. Nothing changes until you press **Post roster** (the preview expires after 15 minutes).
 3. When you press **Post roster**:
    - Each force's voice channel gets View Channel and Connect for that force's members only. Every other member permission on the force channels is removed, and voice channels with no force are closed to members. Role permissions aren't touched.
-   - For each force, it posts in the roster channel: *Join #Force 1 and whisper @Leader (**CharName**) in game to get invited to your force. If you can't make it, please ping @Leader to let them know in #general.* followed by pings for the force's members.
+   - For each force, it posts in the roster channel: *Join #Force 1 and whisper @Leader (**CharName**) in game to get invited to your force. If you can't make it, please ping @Leader to let them know in #general.* in large text, followed by pings for the force's members. A dashed line separates each force from the one before it.
    - A summary goes to the log channel.
 
 Running it again (say, after the comp changed) replaces the access with the new comp.

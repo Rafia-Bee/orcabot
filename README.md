@@ -57,7 +57,7 @@ You'll need:
 | `MEE6_TICKET_PARENT_IDS` | *(optional)* Where MEE6 opens tickets: the channel its ticket threads appear in, or the category its ticket channels go in. When a ticket opens, the bot posts the opener's character, gear and account age in it. |
 | `AION2INDEX_API_KEY` | *(needed for aion2index lookups)* Your API key from the [aion2index community panel](https://aion2index.com/communities/docs). See [Character lookup sites](#character-lookup-sites). |
 | `MEE6_TICKET_RENAMES` | *(optional)* Rename MEE6 tickets by type, like `Force Leader:force,Class Master:master`. If the channel topic MEE6 sets contains the phrase, `0001-name` becomes `force-name`. |
-| `FORCE_LEADER_ROLE_ID` | *(optional)* The Force Leader role. Gives the `FL - <combat power> - <name>` nickname, and `/announce-roster` uses it to find each force's leader. |
+| `FORCE_LEADER_ROLE_ID` | *(optional)* The Force Leader role. Gives the `FL - <combat power> - <name>` nickname, `/announce-roster` uses it to find each force's leader, and `/create-timeslots` needs it. |
 | `FORCE_VC_CATEGORY_ID` | *(needed for force rosters)* The category with the force voice channels. See [Force rosters](#force-rosters). |
 | `ROSTER_CHANNEL_ID` | *(needed for force rosters)* Where `/announce-roster` posts each force's pings |
 | `ROSTER_GENERAL_CHANNEL_ID` | *(optional)* The channel members are told to ping their Force Leader in when they can't make it |
@@ -221,6 +221,30 @@ Running it again (say, after the comp changed) replaces the access with the new 
 
 **`/reset-force-vcs`** after the event removes every member permission from the force voice channels, so they're back to roles only.
 
+## Comp editing timeslots
+
+Only one person can edit a raid-helper comp at a time. Timeslots let the Force Leaders take turns, so nobody overwrites anyone else's changes.
+
+**`/create-timeslots event:<ID or link>`**
+
+Run it in the channel where the Force Leaders should pick their turn. The bot posts a timeslot board there for that raid-helper event:
+
+- There's one timeslot per Force Leader, on the day of the event. They run from `FIRST_TIMESLOT` to no later than `LAST_TIMESLOT`, each `TIMESLOT_DURATION` minutes long (10:00, 17:00 and 20 minutes to start with). The times use `TIMEZONE` (Europe/Helsinki to start with). Mods can change all three with `/verify-config`.
+- If there are more Force Leaders than timeslots that fit, the bot posts the ones that fit and tells you. First come, first served.
+- If the first timeslot has already passed, the timeslots start from the next 5 minutes instead.
+
+**How Force Leaders use it**
+
+1. The board lists every timeslot, shown in each person's own time.
+2. A Force Leader picks a free timeslot by number from the **Pick a timeslot** list. Picking a different one later gives up the old one. **Give up my timeslot** frees it for someone else. Only people with the Force Leader role can pick.
+3. When their timeslot starts, the bot pings them in the channel with an **I'm done** button. After that they can't switch or give up their timeslot.
+4. When they press **I'm done**, the next Force Leader who has a timeslot is pinged straight away and can start early. Anyone with Manage Channels can also press it for them.
+5. When the last timeslot ends, the board closes.
+
+Running the command again for the same event links you to the board that's already there. Add `replace:True` to start over. Everyone's picks are lost, and the old board says it was replaced.
+
+The bot needs a raid-helper event that hasn't started yet, and `FORCE_LEADER_ROLE_ID` must be set.
+
 ## Commands
 
 ### Events
@@ -229,6 +253,7 @@ Running it again (say, after the comp changed) replaces the access with the new 
 | --- | --- | --- |
 | `/announce-roster` | Open each force's voice channel to its members from a raid-helper comp and ping them in the roster channel | Manage Channels |
 | `/reset-force-vcs` | Remove all member access from the force voice channels | Manage Channels |
+| `/create-timeslots` | Post comp editing timeslots for a raid-helper event that Force Leaders can pick from | Manage Channels |
 
 ### Verification
 

@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const { zonedDateTime, nextOccurrence, clock } = require("../src/time");
 const { planSlots, pickableSlots, dueSlots, nextEarlySlot, isFinished } = require("../src/timeslots/schedule");
 const { openStore } = require("../src/verification/store");
+const { renderBoard } = require("../src/timeslots/board");
 
 const TZ = "Europe/Berlin";
 const EVENT_START = 1793644200_000;
@@ -31,6 +32,27 @@ test("time zone helpers", async (t) => {
   await t.test("clock formats in the time zone", () => {
     assert.equal(clock(Date.UTC(2026, 10, 2, 8, 20), TZ), "09:20");
   });
+});
+
+test("timeslot dropdown shows slot numbers and points to the list for times", () => {
+  const board = { id: 1, title: "Siege", status: "open", event_start: EVENT_START };
+  const slot = (index, userId) => ({
+    slot_index: index,
+    starts_at: EVENT_START - (4 - index) * 20 * MIN,
+    ends_at: EVENT_START - (3 - index) * 20 * MIN,
+    user_id: userId,
+    done_at: null,
+    reminded_at: null,
+  });
+  const { components } = renderBoard(board, [slot(0, "7"), slot(1, null), slot(2, null)], EVENT_START - 2 * 60 * MIN);
+  const options = components[0].components[0].options.map((o) => o.data);
+  assert.deepEqual(
+    options.map((o) => [o.label, o.description, o.value]),
+    [
+      ["Timeslot 2", "Time is in the list above", "1"],
+      ["Timeslot 3", "Time is in the list above", "2"],
+    ]
+  );
 });
 
 test("planning timeslots", async (t) => {

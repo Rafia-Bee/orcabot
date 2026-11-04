@@ -11,7 +11,6 @@ const {
 const { getConfig } = require("../verification/config");
 const { getStore } = require("../verification/store");
 const { COLORS } = require("../verification/embeds");
-const { clock } = require("../time");
 const { isActive, pickableSlots, dueSlots, nextEarlySlot, isFinished } = require("./schedule");
 
 const PREFIX = "timeslot";
@@ -50,7 +49,6 @@ function renderBoard(board, slots, now = Date.now()) {
     );
   if (finished) return { embeds: [embed], components: [] };
 
-  const { timeZone } = getConfig();
   const pickable = pickableSlots(slots, now).slice(0, OPTIONS_PER_MENU * MAX_MENUS);
   const rows = [];
   for (let i = 0; i < pickable.length; i += OPTIONS_PER_MENU) {
@@ -66,8 +64,8 @@ function renderBoard(board, slots, now = Date.now()) {
           )
           .addOptions(
             chunk.map((slot) => ({
-              label: `${slot.slot_index + 1}. ${clock(slot.starts_at, timeZone)}–${clock(slot.ends_at, timeZone)}`,
-              description: timeZone,
+              label: `Timeslot ${slot.slot_index + 1}`,
+              description: "Time is in the list above",
               value: String(slot.slot_index),
             }))
           )

@@ -227,19 +227,22 @@ Only one person can edit a raid-helper comp at a time. Timeslots let the Force L
 
 **`/create-timeslots event:<ID or link>`**
 
-Run it in the channel where the Force Leaders should pick their turn. The bot posts a timeslot board there for that raid-helper event:
+Run it in the channel where the Force Leaders should pick their turn. The bot posts a timeslot board there for that raid-helper event. Force Leaders book their own times on it:
 
-- There's one timeslot per Force Leader, on the day of the event. They run from `FIRST_TIMESLOT` to no later than `LAST_TIMESLOT`, each `TIMESLOT_DURATION` minutes long (10:00, 17:00 and 20 minutes to start with). The times use `TIMEZONE` (Europe/Helsinki to start with). Mods can change all three with `/verify-config`.
-- If there are more Force Leaders than timeslots that fit, the bot posts the ones that fit and tells you. First come, first served.
-- If the first timeslot has already passed, the timeslots start from the next 5 minutes instead.
+- Each timeslot is `TIMESLOT_DURATION` minutes long (30 to start with).
+- A timeslot can be on any day from today until the event, but it must end at least `TIMESLOT_MIN_HOURS_BEFORE_EVENT` hours before the event starts (3 to start with).
+- Timeslots can't overlap, so only one person edits the comp at a time.
+
+Mods can change both numbers with `/verify-config`.
 
 **How Force Leaders use it**
 
-1. The board lists every timeslot, shown in each person's own time.
-2. A Force Leader picks a free timeslot by number from the **Pick a timeslot** list. Picking a different one later gives up the old one. **Give up my timeslot** frees it for someone else. Only people with the Force Leader role can pick.
-3. When their timeslot starts, the bot pings them in the channel with an **I'm done** button. After that they can't switch or give up their timeslot.
-4. When they press **I'm done**, the next Force Leader who has a timeslot is pinged straight away and can start early. Anyone with Manage Channels can also press it for them.
-5. When the last timeslot ends, the board closes.
+1. They press **Pick a time**. The first time, the bot asks which timezone they're in. Each choice shows what time it is there right now, so they just pick the one that matches their clock. The bot remembers it. **Change my timezone** changes it later.
+2. A form opens. They pick the date and type the start time on the 24-hour clock (like `18:30`), in their own time. If the time is taken, already passed or too close to the event, the bot says why. Picking again moves their timeslot. **Give up my timeslot** removes it. Only people with the Force Leader role can pick.
+3. The board lists the **Upcoming** timeslots in time order, shown in each person's own time. The top line is whoever is editing now, or who's next. Finished timeslots move down to **Past timeslots**.
+4. When a timeslot starts, the bot pings its Force Leader in the channel with an **I'm done** button. After that they can't move or give up their timeslot.
+5. When they press **I'm done**, the next Force Leader is pinged straight away and can start early, but only if their timeslot starts within the next 2 hours. Anyone with Manage Channels can also press **I'm done** for them.
+6. When the event starts, the board closes.
 
 Running the command again for the same event links you to the board that's already there. Add `replace:True` to start over. Everyone's picks are lost, and the old board says it was replaced.
 

@@ -1,58 +1,73 @@
-const { zonedParts, zonedDateTime } = require("../time");
+// Rules for comp editing timeslots, kept free of Discord and the database so they're easy to test.
+// parseClock: reads a typed 24-hour time like 18:30, 18.30 or 1830.
+// dateChoices: the dates someone can pick, from today to the last day a timeslot can start, in their time zone.
+// checkPick: says why a picked start time isn't allowed (past, too close to the event, overlaps someone), or null.
+// isActive: whether a timeslot's turn is running right now.
+// splitSlots: upcoming timeslots in time order, and past ones (done or ended).
+// dueSlots: timeslots whose start time has come and haven't been pinged yet.
+// nextEarlySlot: the next timeslot to ping early after someone's done, if it starts soon enough.
+const { zonedParts } = require("../time");
 
-const MAX_SLOTS = 50;
-const ROUND_START_MS = 5 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_DATES = 25;
+const GRACE_MS = 60 * 1000;
 
-function planSlots({ eventStart, first, last, durationMinutes, timeZone, leaderCount, now = Date.now() }) {
-  const day = zonedParts(eventStart, timeZone);
-  const windowStart = zonedDateTime(day, first, timeZone);
-  const windowEnd = zonedDateTime(day, last, timeZone);
-  if (windowEnd <= windowStart) {
-    throw new Error(`LAST_TIMESLOT (${last}) must be later than FIRST_TIMESLOT (${first})`);
+function parseClock(text) {
+  const match = String(text ?? "").trim().match(/^(\d{1,2})[:.]?(\d{2})$/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function dateChoices({ now, latestStart, timeZone }) {
+  if (latestStart < now) return [];
+  const toDate = ({ year, month, day }) => Date.UTC(year, month - 1, day);
+  const first = toDate(zonedParts(now, timeZone));
+  const last = toDate(zonedParts(latestStart, timeZone));
+  const dates = [];
+  for (let day = first; day <= last && dates.length < MAX_DATES; day += DAY_MS) {
+    const date = new Date(day);
+    dates.push({ year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() });
   }
+  return dates;
+}
 
-  const durationMs = durationMinutes * 60 * 1000;
-  const start = Math.max(windowStart, Math.ceil(now / ROUND_START_MS) * ROUND_START_MS);
-  const fits = Math.max(0, Math.floor((windowEnd - start) / durationMs));
-  const count = Math.min(leaderCount, fits, MAX_SLOTS);
-  const slots = Array.from({ length: count }, (_, i) => ({
-    startsAt: start + i * durationMs,
-    endsAt: start + (i + 1) * durationMs,
-  }));
-  return { slots, fits: Math.min(fits, MAX_SLOTS), windowStart, windowEnd, startedLate: start > windowStart };
+function checkPick({ startsAt, durationMs, eventStart, minGapMs, slots, userId, now }) {
+  const endsAt = startsAt + durationMs;
+  if (startsAt + GRACE_MS <= now) return { problem: "past" };
+  if (endsAt > eventStart - minGapMs) return { problem: "too_late" };
+  const clash = slots.find(
+    (slot) => slot.user_id !== userId && slot.done_at === null && slot.starts_at < endsAt && slot.ends_at > startsAt
+  );
+  return clash ? { problem: "overlap", slot: clash } : null;
 }
 
 function isActive(slot, now) {
   return slot.reminded_at !== null && slot.done_at === null && slot.ends_at > now;
 }
 
-function lastRemindedIndex(slots) {
-  return slots.reduce((max, slot) => (slot.reminded_at !== null ? Math.max(max, slot.slot_index) : max), -1);
+function byStart(a, b) {
+  return a.starts_at - b.starts_at;
 }
 
-function pickableSlots(slots, now = Date.now()) {
-  const after = lastRemindedIndex(slots);
-  return slots.filter((slot) => slot.user_id === null && slot.ends_at > now && slot.slot_index > after);
+function splitSlots(slots, now = Date.now()) {
+  const isPast = (slot) => slot.done_at !== null || slot.ends_at <= now;
+  return {
+    upcoming: slots.filter((slot) => !isPast(slot)).sort(byStart),
+    past: slots.filter(isPast).sort(byStart),
+  };
 }
 
 function dueSlots(slots, now = Date.now()) {
-  return slots.filter(
-    (slot) => slot.user_id !== null && slot.reminded_at === null && slot.starts_at <= now && slot.ends_at > now
-  );
+  return slots.filter((slot) => slot.reminded_at === null && slot.starts_at <= now && slot.ends_at > now);
 }
 
-function nextEarlySlot(slots, now = Date.now()) {
-  const after = lastRemindedIndex(slots);
-  if (after < 0 || slots.some((slot) => isActive(slot, now))) return null;
-  return (
-    slots.find(
-      (slot) => slot.slot_index > after && slot.user_id !== null && slot.reminded_at === null && slot.ends_at > now
-    ) ?? null
-  );
+function nextEarlySlot(slots, now, windowMs) {
+  if (slots.some((slot) => isActive(slot, now))) return null;
+  const next = slots.filter((slot) => slot.reminded_at === null && slot.ends_at > now).sort(byStart)[0];
+  return next && next.starts_at - now <= windowMs ? next : null;
 }
 
-function isFinished(slots, now = Date.now()) {
-  return slots.length === 0 || slots[slots.length - 1].ends_at <= now;
-}
-
-module.exports = { MAX_SLOTS, planSlots, isActive, pickableSlots, dueSlots, nextEarlySlot, isFinished };
+module.exports = { parseClock, dateChoices, checkPick, isActive, splitSlots, dueSlots, nextEarlySlot };

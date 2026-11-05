@@ -168,18 +168,12 @@ function loadConfig() {
   if (!isValidTimeZone(timeZone)) {
     throw new Error(`TIMEZONE must be a time zone name like Europe/Berlin, got "${timeZone}"`);
   }
-  const timeFromEnv = (key, fallback) => {
-    const raw = process.env[key]?.trim() || fallback;
-    const time = parseTime(raw);
-    if (!time) throw new Error(`${key} must look like HH:MM (24-hour), got "${raw}"`);
-    return time;
-  };
   const timeslots = {
-    first: timeFromEnv("FIRST_TIMESLOT", "10:00"),
-    last: timeFromEnv("LAST_TIMESLOT", "17:00"),
-    durationMinutes: intFromEnv("TIMESLOT_DURATION", 20),
+    durationMinutes: intFromEnv("TIMESLOT_DURATION", 30),
+    minHoursBeforeEvent: intFromEnv("TIMESLOT_MIN_HOURS_BEFORE_EVENT", 3),
   };
   if (timeslots.durationMinutes < 1) throw new Error("TIMESLOT_DURATION must be at least 1");
+  if (timeslots.minHoursBeforeEvent < 0) throw new Error("TIMESLOT_MIN_HOURS_BEFORE_EVENT must be >= 0");
 
   const mode = (process.env.VERIFY_MODE || "shadow").trim();
   if (!["shadow", "live"].includes(mode)) {
@@ -272,9 +266,8 @@ const EDITABLE_SETTINGS = {
   MIN_ACCOUNT_AGE_DAYS: { label: "Min account age", min: 0, max: 3650, unit: " days" },
   ARCHIVED_TICKET_RETENTION_DAYS: { label: "Archived tickets kept", min: 1, max: 365, unit: " days" },
   DAILY_RECHECK_TIME: { label: "Daily re-check time", type: "time", optional: true },
-  FIRST_TIMESLOT: { label: "First timeslot", type: "time" },
-  LAST_TIMESLOT: { label: "Last timeslot ends", type: "time" },
   TIMESLOT_DURATION: { label: "Timeslot length", min: 5, max: 180, unit: " min" },
+  TIMESLOT_MIN_HOURS_BEFORE_EVENT: { label: "Timeslots end before event", min: 0, max: 72, unit: " h" },
 };
 
 function updateSetting(key, value) {

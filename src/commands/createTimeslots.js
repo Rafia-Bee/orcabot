@@ -2,9 +2,10 @@ const { SlashCommandBuilder, PermissionsBitField, MessageFlags, escapeMarkdown }
 const { getConfig } = require("../verification/config");
 const { getStore } = require("../verification/store");
 const { parseRaidHelperId, fetchEvent } = require("../roster/comp");
-const { planSlots } = require("../timeslots/schedule");
 const { PREFIX, renderBoard, startTimeslotSweeper, handleComponent } = require("../timeslots/board");
 
+const MIN_MS = 60 * 1000;
+const HOUR_MS = 60 * MIN_MS;
 const ts = (ms, style = "t") => `<t:${Math.floor(ms / 1000)}:${style}>`;
 
 async function closeOldBoard(interaction, board) {
@@ -76,26 +77,11 @@ module.exports = {
     if (!eventStart) return interaction.editReply("raid-helper didn't send a start time for this event.");
     if (eventStart <= Date.now()) return interaction.editReply("This event has already started.");
 
-    await interaction.guild.members.fetch();
-    const role = interaction.guild.roles.cache.get(cfg.forceLeaderRoleId);
-    const leaderCount = role ? role.members.filter((member) => !member.user.bot).size : 0;
-    if (leaderCount === 0) return interaction.editReply("Nobody has the Force Leader role.");
-
-    let plan;
-    try {
-      plan = planSlots({
-        eventStart,
-        ...cfg.timeslots,
-        timeZone: cfg.timeZone,
-        leaderCount,
-      });
-    } catch (error) {
-      return interaction.editReply(error.message);
-    }
-    if (plan.slots.length === 0) {
+    const { durationMinutes, minHoursBeforeEvent } = cfg.timeslots;
+    const latestEnd = eventStart - minHoursBeforeEvent * HOUR_MS;
+    if (latestEnd - durationMinutes * MIN_MS < Date.now()) {
       return interaction.editReply(
-        `No ${cfg.timeslots.durationMinutes} min timeslot fits between ${cfg.timeslots.first} and ` +
-          `${cfg.timeslots.last} (${cfg.timeZone}) on the event day anymore.`
+        `It's too late for timeslots. They must end at least ${minHoursBeforeEvent} hours before the event.`
       );
     }
 
@@ -108,7 +94,6 @@ module.exports = {
       channelId: interaction.channelId,
       eventStart,
       createdBy: interaction.user.id,
-      slots: plan.slots,
     });
     try {
       const message = await interaction.channel.send({
@@ -121,21 +106,9 @@ module.exports = {
       return interaction.editReply(`Couldn't post the timeslots in this channel: ${error.message}`);
     }
 
-    const first = plan.slots[0];
-    const last = plan.slots[plan.slots.length - 1];
-    const notes = [
-      `Posted ${plan.slots.length} timeslots of ${cfg.timeslots.durationMinutes} min ` +
-        `(${ts(first.startsAt)}–${ts(last.endsAt)}) for **${escapeMarkdown(title)}** on ${ts(eventStart, "F")}.`,
-    ];
-    if (leaderCount > plan.slots.length) {
-      notes.push(
-        `There are ${leaderCount} force leaders, but only ${plan.slots.length} timeslots fit, so ` +
-          `${leaderCount - plan.slots.length} of them can't pick one. Shorten TIMESLOT_DURATION or move ` +
-          "FIRST_TIMESLOT / LAST_TIMESLOT with /verify-config, then run this again with replace:True."
-      );
-    }
-    if (plan.startedLate) notes.push(`FIRST_TIMESLOT (${cfg.timeslots.first}) had already passed, so the first timeslot starts at ${ts(first.startsAt)}.`);
-    if (last.endsAt > eventStart) notes.push("Warning: the last timeslot ends after the event starts. Check LAST_TIMESLOT.");
-    return interaction.editReply(notes.join("\n"));
+    return interaction.editReply(
+      `Posted the timeslot board for **${escapeMarkdown(title)}** on ${ts(eventStart, "F")}. ` +
+        `Force leaders can book ${durationMinutes} min timeslots that end by ${ts(latestEnd, "f")}.`
+    );
   },
 };

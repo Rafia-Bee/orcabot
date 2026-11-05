@@ -85,7 +85,9 @@ function buildSettingsEmbed() {
       { name: "Time zone", value: cfg.timeZone, inline: true },
       {
         name: "Comp timeslots",
-        value: `${cfg.timeslots.first}–${cfg.timeslots.last}, ${cfg.timeslots.durationMinutes} min each`,
+        value:
+          `${cfg.timeslots.durationMinutes} min each, ending at least ` +
+          `${cfg.timeslots.minHoursBeforeEvent} h before the event`,
         inline: true,
       },
       { name: "Verified role", value: role(cfg.verifiedRoleId), inline: true },

@@ -98,6 +98,11 @@ CREATE TABLE IF NOT EXISTS timeslots (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS timeslots_one_per_user
   ON timeslots (board_id, user_id) WHERE user_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS user_timezones (
+  user_id          TEXT PRIMARY KEY,
+  time_zone        TEXT NOT NULL
+);
 `;
 
 function parseJson(text) {
@@ -251,8 +256,12 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
       VALUES (@raid_event_id, @title, @guild_id, @channel_id, @event_start, @created_by, @created_at)
       RETURNING *
     `),
-    insertTimeslot: db.prepare(
-      "INSERT INTO timeslots (board_id, slot_index, starts_at, ends_at) VALUES (?, ?, ?, ?)"
+    insertTimeslot: db.prepare(`
+      INSERT INTO timeslots (board_id, slot_index, starts_at, ends_at, user_id)
+      SELECT ?, COALESCE(MAX(slot_index), -1) + 1, ?, ?, ? FROM timeslots WHERE board_id = ?
+    `),
+    startedTimeslotForUser: db.prepare(
+      "SELECT 1 FROM timeslots WHERE board_id = ? AND user_id = ? AND reminded_at IS NOT NULL"
     ),
     timeslotBoardById: db.prepare("SELECT * FROM timeslot_boards WHERE id = ?"),
     openTimeslotBoardForEvent: db.prepare(
@@ -263,12 +272,11 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
     closeTimeslotBoard: db.prepare(
       "UPDATE timeslot_boards SET status = 'closed' WHERE id = ? AND status = 'open'"
     ),
-    timeslots: db.prepare("SELECT * FROM timeslots WHERE board_id = ? ORDER BY slot_index"),
-    releaseTimeslot: db.prepare(
-      "UPDATE timeslots SET user_id = NULL WHERE board_id = ? AND user_id = ? AND reminded_at IS NULL"
+    timeslots: db.prepare(
+      "SELECT * FROM timeslots WHERE board_id = ? AND user_id IS NOT NULL ORDER BY starts_at, slot_index"
     ),
-    claimTimeslot: db.prepare(
-      "UPDATE timeslots SET user_id = ? WHERE board_id = ? AND slot_index = ? AND user_id IS NULL"
+    releaseTimeslot: db.prepare(
+      "DELETE FROM timeslots WHERE board_id = ? AND user_id = ? AND reminded_at IS NULL"
     ),
     markTimeslotReminded: db.prepare(
       "UPDATE timeslots SET reminded_at = ?, reminder_message_id = ? WHERE board_id = ? AND slot_index = ?"
@@ -276,19 +284,18 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
     markTimeslotDone: db.prepare(
       "UPDATE timeslots SET done_at = ? WHERE board_id = ? AND slot_index = ? AND done_at IS NULL"
     ),
+    userTimeZone: db.prepare("SELECT time_zone FROM user_timezones WHERE user_id = ?"),
+    setUserTimeZone: db.prepare(`
+      INSERT INTO user_timezones (user_id, time_zone) VALUES (?, ?)
+      ON CONFLICT (user_id) DO UPDATE SET time_zone = excluded.time_zone
+    `),
   };
 
-  const moveTimeslotClaim = db.transaction((boardId, slotIndex, userId) => {
+  const pickTimeslot = db.transaction((boardId, userId, startsAt, endsAt) => {
+    if (stmt.startedTimeslotForUser.get(boardId, userId)) return false;
     stmt.releaseTimeslot.run(boardId, userId);
-    if (stmt.claimTimeslot.run(userId, boardId, slotIndex).changes === 0) {
-      throw Object.assign(new Error("Timeslot already taken"), { code: "TIMESLOT_TAKEN" });
-    }
-  });
-
-  const createTimeslotBoard = db.transaction((board, slots) => {
-    const row = stmt.insertTimeslotBoard.get(board);
-    slots.forEach((slot, index) => stmt.insertTimeslot.run(row.id, index, slot.startsAt, slot.endsAt));
-    return row;
+    stmt.insertTimeslot.run(boardId, startsAt, endsAt, userId, boardId);
+    return true;
   });
 
   return {
@@ -480,19 +487,16 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
       stmt.setState.run(key, String(value));
     },
 
-    createTimeslotBoard({ raidEventId, title, guildId, channelId, eventStart, createdBy, slots }) {
-      return createTimeslotBoard(
-        {
-          raid_event_id: raidEventId,
-          title,
-          guild_id: guildId,
-          channel_id: channelId,
-          event_start: eventStart,
-          created_by: createdBy,
-          created_at: Date.now(),
-        },
-        slots
-      );
+    createTimeslotBoard({ raidEventId, title, guildId, channelId, eventStart, createdBy }) {
+      return stmt.insertTimeslotBoard.get({
+        raid_event_id: raidEventId,
+        title,
+        guild_id: guildId,
+        channel_id: channelId,
+        event_start: eventStart,
+        created_by: createdBy,
+        created_at: Date.now(),
+      });
     },
 
     getTimeslotBoard(id) {
@@ -519,14 +523,8 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
       return stmt.timeslots.all(boardId);
     },
 
-    claimTimeslot(boardId, slotIndex, userId) {
-      try {
-        moveTimeslotClaim(boardId, slotIndex, userId);
-        return true;
-      } catch (error) {
-        if (error.code === "TIMESLOT_TAKEN") return false;
-        throw error;
-      }
+    pickTimeslot(boardId, userId, startsAt, endsAt) {
+      return pickTimeslot(boardId, userId, startsAt, endsAt);
     },
 
     releaseTimeslot(boardId, userId) {
@@ -539,6 +537,14 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
 
     markTimeslotDone(boardId, slotIndex, now = Date.now()) {
       return stmt.markTimeslotDone.run(now, boardId, slotIndex).changes > 0;
+    },
+
+    getUserTimeZone(userId) {
+      return stmt.userTimeZone.get(userId)?.time_zone ?? null;
+    },
+
+    setUserTimeZone(userId, timeZone) {
+      stmt.setUserTimeZone.run(userId, timeZone);
     },
   };
 }

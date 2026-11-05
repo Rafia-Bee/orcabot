@@ -219,6 +219,8 @@ Force voice channels are hidden by default, so people who join the server can't 
 
 Running it again (say, after the comp changed) replaces the access with the new comp.
 
+**`/roster-reminder comp:<ID or link>`** is for just before the event starts. It loads the comp the same way and checks who's sitting in which voice channel. For each force, it pings only the members who aren't in their force's voice channel yet (including anyone in the wrong force's channel), with *You're not in #Force 1 yet. Join it and whisper @Leader...*. Forces where everyone's already in are skipped. It posts straight away in the roster channel, and you get a private summary of who was pinged. It doesn't change any permissions.
+
 **`/reset-force-vcs`** after the event removes every member permission from the force voice channels, so they're back to roles only.
 
 ## Comp editing timeslots
@@ -255,6 +257,7 @@ The bot needs a raid-helper event that hasn't started yet, and `FORCE_LEADER_ROL
 | Command | What it does | Who can use it |
 | --- | --- | --- |
 | `/announce-roster` | Open each force's voice channel to its members from a raid-helper comp and ping them in the roster channel | Manage Channels |
+| `/roster-reminder` | Ping the members of a raid-helper comp who aren't in their force's voice channel yet | Manage Channels |
 | `/reset-force-vcs` | Remove all member access from the force voice channels | Manage Channels |
 | `/create-timeslots` | Post comp editing timeslots for a raid-helper event that Force Leaders can pick from | Manage Channels |
 

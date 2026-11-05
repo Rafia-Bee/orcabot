@@ -1,7 +1,7 @@
 const { ChannelType, OverwriteType, PermissionFlagsBits } = require("discord.js");
 const { getConfig } = require("../verification/config");
 const { getStore } = require("../verification/store");
-const { buildForces, channelKey, rosterMessages } = require("./comp");
+const { buildForces, channelKey, missingFromVoice, rosterMessages } = require("./comp");
 
 const MEMBER_FETCH_BATCH = 100;
 const FORCE_MEMBER_ALLOW = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect];
@@ -215,4 +215,39 @@ async function resetForceVcs(guild, actor) {
   });
 }
 
-module.exports = { planRoster, applyRoster, resetForceVcs };
+async function remindRoster(guild, plan) {
+  const cfg = getConfig();
+  const result = { posted: 0, pinged: 0, allPresent: [], problems: [] };
+  const rosterChannel = await guild.channels.fetch(cfg.roster.channelId);
+  const voiceChannelOf = new Map(guild.voiceStates.cache.map((state) => [state.id, state.channelId]));
+
+  for (const force of plan.forces) {
+    if (!force.channelId || force.memberIds.length === 0) continue;
+    const missing = missingFromVoice(force.memberIds, force.channelId, voiceChannelOf);
+    if (missing.length === 0) {
+      result.allPresent.push(force.name);
+      continue;
+    }
+    const messages = rosterMessages({
+      voiceChannelId: force.channelId,
+      leaderId: force.leaderId,
+      leaderCharName: force.leaderCharName,
+      generalChannelId: cfg.roster.generalChannelId,
+      memberIds: missing.filter((id) => id !== force.leaderId),
+      divided: result.posted > 0,
+      reminder: true,
+    });
+    try {
+      for (const content of messages) {
+        await rosterChannel.send({ content, allowedMentions: { users: missing } });
+      }
+      result.posted += 1;
+      result.pinged += missing.length;
+    } catch (error) {
+      result.problems.push(`${force.name}: couldn't post the reminder (${error.message})`);
+    }
+  }
+  return result;
+}
+
+module.exports = { planRoster, applyRoster, resetForceVcs, remindRoster };

@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { parseRaidHelperId, buildForces, channelKey, rosterMessages } = require("../src/roster/comp");
+const { parseRaidHelperId, buildForces, channelKey, rosterMessages, missingFromVoice } = require("../src/roster/comp");
 
 const groups = Array.from({ length: 12 }, (_, i) => ({
   name: `Group ${i + 1}`,
@@ -87,6 +87,30 @@ test("roster message without a leader or general channel still reads", () => {
   const [message] = rosterMessages({ voiceChannelId: "900", leaderId: null, memberIds: ["2"] });
   assert.match(message, /whisper your force leader in game/);
   assert.match(message, /in #general\.\n<@2>$/);
+});
+
+test("members not in their force's voice channel are missing, even if they sit in another one", () => {
+  const voiceChannelOf = new Map([
+    ["1", "900"],
+    ["2", "901"],
+  ]);
+  assert.deepEqual(missingFromVoice(["1", "2", "3"], "900", voiceChannelOf), ["2", "3"]);
+});
+
+test("reminder message tells members they're not in the voice channel yet", () => {
+  const [message] = rosterMessages({
+    voiceChannelId: "900",
+    leaderId: "1",
+    leaderCharName: "Xia",
+    generalChannelId: "800",
+    memberIds: ["2"],
+    reminder: true,
+  });
+  assert.equal(
+    message,
+    "### You're not in <#900> yet. Join it and whisper <@1> (**Xia**) in game to get invited to your force. " +
+      "If you can't make it, please ping <@1> to let them know in <#800>.\n<@2>"
+  );
 });
 
 test("long rosters are split under Discord's 2000 character limit", () => {

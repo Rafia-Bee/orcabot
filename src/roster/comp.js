@@ -78,13 +78,26 @@ function channelKey(name) {
     .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
-function rosterMessages({ voiceChannelId, leaderId, leaderCharName, generalChannelId, memberIds, divided = false }) {
+function missingFromVoice(memberIds, voiceChannelId, voiceChannelOf) {
+  return memberIds.filter((id) => voiceChannelOf.get(id) !== voiceChannelId);
+}
+
+function rosterMessages({
+  voiceChannelId,
+  leaderId,
+  leaderCharName,
+  generalChannelId,
+  memberIds,
+  divided = false,
+  reminder = false,
+}) {
   const leader = leaderId ? `<@${leaderId}>` : "your force leader";
   const whisper = leaderId && leaderCharName ? `${leader} (**${escapeMarkdown(leaderCharName)}**)` : leader;
   const general = generalChannelId ? `<#${generalChannelId}>` : "#general";
+  const join = reminder ? `You're not in <#${voiceChannelId}> yet. Join it` : `Join <#${voiceChannelId}>`;
   const head =
     (divided ? `${FORCE_DIVIDER}\n` : "") +
-    `### Join <#${voiceChannelId}> and whisper ${whisper} in game to get invited to your force. ` +
+    `### ${join} and whisper ${whisper} in game to get invited to your force. ` +
     `If you can't make it, please ping ${leader} to let them know in ${general}.`;
 
   const messages = [];
@@ -102,4 +115,12 @@ function rosterMessages({ voiceChannelId, leaderId, leaderCharName, generalChann
   return messages;
 }
 
-module.exports = { parseRaidHelperId, fetchComp, fetchEvent, buildForces, channelKey, rosterMessages };
+module.exports = {
+  parseRaidHelperId,
+  fetchComp,
+  fetchEvent,
+  buildForces,
+  channelKey,
+  missingFromVoice,
+  rosterMessages,
+};

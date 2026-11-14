@@ -1,6 +1,13 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { decide, DAY_MS } = require("../src/verification/rules");
+const {
+  decide,
+  decideRename,
+  offersRename,
+  renameCandidate,
+  confirmsRename,
+  DAY_MS,
+} = require("../src/verification/rules");
 
 const config = {
   requiredFaction: "Asmodians",
@@ -131,4 +138,60 @@ test("matching by ID wins over matching by name", () => {
     "review:account_has_other_claim"
   );
   assert.equal(outcome({ ownClaim: { ...ownClaim, character_id: null } }), "verify:passed");
+});
+
+test("re-check offers Rename only when the name vanished and we know the character ID", () => {
+  const claim = { discord_id: "1", char_name: "OldName", character_id: "id-1" };
+  assert.equal(offersRename("recheck_not_found", claim), true);
+  assert.equal(offersRename("recheck_different_character", claim), true);
+  assert.equal(offersRename("recheck_wrong_faction", claim), false);
+  assert.equal(offersRename("recheck_not_found", { ...claim, character_id: null }), false);
+  assert.equal(offersRename("recheck_not_found", null), false);
+});
+
+test("rename goes through only for the same character ID", () => {
+  const claim = { discord_id: "1", char_name: "OldName", character_id: "id-1" };
+  const rename = (extra = {}) =>
+    decideRename({ claim, lookup: found({ name: "NewName", characterId: "id-1" }), charClaim: null, config, ...extra })
+      .reason;
+
+  assert.equal(rename(), "passed");
+  assert.equal(rename({ lookup: found({ characterId: "id-2" }) }), "different_character");
+  assert.equal(rename({ lookup: found({ characterId: null }) }), "different_character");
+  assert.equal(rename({ claim: { ...claim, character_id: null } }), "no_saved_id");
+  assert.equal(rename({ lookup: { status: "not_found" } }), "not_found");
+  assert.equal(rename({ lookup: { status: "invalid_name" } }), "invalid_name");
+  assert.equal(rename({ lookup: { status: "unavailable", reason: "http 500" } }), "unavailable");
+  assert.equal(rename({ lookup: found({ characterId: "id-1", faction: "Elyos" }) }), "wrong_faction");
+  assert.equal(rename({ lookup: found({ characterId: "id-1", server: "Lumiel" }) }), "wrong_server");
+  assert.equal(rename({ charClaim: { discord_id: "2", char_name: "NewName" } }), "name_already_claimed");
+  assert.equal(rename({ charClaim: { discord_id: "1", char_name: "NewName" } }), "passed");
+});
+
+test("a backup site showing a new name for the old one is a rename to check", () => {
+  const claim = { discord_id: "1", char_name: "MommySage", character_id: "id-1" };
+  const fromBackup = { name: "Lisaツ", characterId: null };
+  assert.equal(renameCandidate(claim, fromBackup), "Lisaツ");
+  assert.equal(renameCandidate(claim, { name: "mommysage", characterId: null }), null);
+  assert.equal(renameCandidate(claim, { name: "Lisaツ", characterId: "id-2" }), null);
+  assert.equal(renameCandidate({ ...claim, character_id: null }, fromBackup), null);
+  assert.equal(renameCandidate(claim, null), null);
+});
+
+test("an automatic rename needs the same ID and a free name", () => {
+  const claim = { discord_id: "1", char_name: "MommySage", character_id: "id-1" };
+  const renamed = { name: "Lisaツ", characterId: "id-1" };
+  assert.equal(confirmsRename({ claim, character: renamed, charClaim: null }), true);
+  assert.equal(confirmsRename({ claim, character: { ...renamed, characterId: "id-2" }, charClaim: null }), false);
+  assert.equal(confirmsRename({ claim, character: { ...renamed, characterId: null }, charClaim: null }), false);
+  assert.equal(confirmsRename({ claim, character: null, charClaim: null }), false);
+  assert.equal(confirmsRename({ claim, character: renamed, charClaim: { discord_id: "2" } }), false);
+  assert.equal(confirmsRename({ claim, character: renamed, charClaim: { discord_id: "1" } }), true);
+});
+
+test("a passed rename says it's ok", () => {
+  const claim = { discord_id: "1", char_name: "OldName", character_id: "id-1" };
+  const lookup = found({ name: "NewName", characterId: "id-1" });
+  assert.equal(decideRename({ claim, lookup, charClaim: null, config }).ok, true);
+  assert.equal(decideRename({ claim, lookup: { status: "not_found" }, charClaim: null, config }).ok, false);
 });

@@ -26,7 +26,13 @@ const {
 const { randomGrantDelayMs, startGrantSweeper } = require("./access");
 const { watchMee6Tickets } = require("./mee6Tickets");
 const { scheduleDailyRecheck } = require("./recheck");
-const { openReviewCase, isReviewButton, handleReviewButton } = require("./review");
+const {
+  openReviewCase,
+  isReviewButton,
+  handleReviewButton,
+  isRenameModal,
+  handleRenameSubmit,
+} = require("./review");
 const {
   openTicket,
   isTicketButton,
@@ -259,6 +265,9 @@ async function handleComponent(interaction) {
   }
   if (interaction.isModalSubmit() && isTicketDenyModal(interaction.customId)) {
     return handleDenySubmit(interaction);
+  }
+  if (interaction.isModalSubmit() && isRenameModal(interaction.customId)) {
+    return handleRenameSubmit(interaction);
   }
   if (interaction.isButton() && isTicketButton(interaction.customId)) {
     return handleTicketButton(interaction);

@@ -5,7 +5,7 @@ const { lookupCharacter, primarySource } = require("./lookup");
 const { nextOccurrence } = require("../time");
 const { applyCharacterRoles, applyNickname, canRename } = require("./access");
 const { openReviewCase } = require("./review");
-const { isSameCharacter } = require("./rules");
+const { isSameCharacter, renameCandidate, confirmsRename } = require("./rules");
 const { COLORS, buildEventEmbed, postLog } = require("./embeds");
 
 const MAX_CONSECUTIVE_FAILURES = 5;
@@ -40,7 +40,14 @@ async function recheckClaim(client, guild, claim) {
   }
 
   let reviewReason = null;
-  const character = lookup.status === "found" ? lookup.character : null;
+  let character = lookup.status === "found" ? lookup.character : null;
+  const candidate = renameCandidate(claim, character);
+  if (candidate) {
+    const confirm = await lookupCharacter(candidate, { fresh: true });
+    const renamed = confirm.status === "found" ? confirm.character : null;
+    const charClaim = renamed ? store.getVerificationByCharName(renamed.name) : null;
+    if (confirmsRename({ claim, character: renamed, charClaim })) character = renamed;
+  }
   if (!character) reviewReason = "recheck_not_found";
   else if (!isSameCharacter(claim, character)) reviewReason = "recheck_different_character";
   else if (!same(character.faction, cfg.requiredFaction)) reviewReason = "recheck_wrong_faction";

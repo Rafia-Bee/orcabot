@@ -96,4 +96,45 @@ function decide({ lookup, accountAgeMs, charClaim, ownClaim, discordId, config }
   return { outcome: OUTCOMES.VERIFY, reason: "passed" };
 }
 
-module.exports = { decide, isSameCharacter, OUTCOMES, DAY_MS };
+const RENAME_REASONS = ["recheck_not_found", "recheck_different_character"];
+
+function offersRename(reason, claim) {
+  return RENAME_REASONS.includes(reason) && Boolean(claim?.character_id);
+}
+
+function decideRename({ claim, lookup, charClaim, config }) {
+  const result = (reason) => ({ ok: reason === "passed", reason });
+  const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+
+  if (!claim?.character_id) return result("no_saved_id");
+  if (lookup.status === "invalid_name" || lookup.status === "not_found") return result(lookup.status);
+  if (lookup.status !== "found") return result("unavailable");
+
+  const character = lookup.character;
+  if (character.characterId !== claim.character_id) return result("different_character");
+  if (!same(character.faction, config.requiredFaction)) return result("wrong_faction");
+  if (!same(character.server, config.requiredServer)) return result("wrong_server");
+  if (charClaim && charClaim.discord_id !== claim.discord_id) return result("name_already_claimed");
+  return result("passed");
+}
+
+function renameCandidate(claim, character) {
+  if (!claim?.character_id || !character || character.characterId) return null;
+  return String(character.name).toLowerCase() === String(claim.char_name).toLowerCase() ? null : character.name;
+}
+
+function confirmsRename({ claim, character, charClaim }) {
+  if (!character?.characterId || character.characterId !== claim.character_id) return false;
+  return !charClaim || charClaim.discord_id === claim.discord_id;
+}
+
+module.exports = {
+  decide,
+  decideRename,
+  offersRename,
+  renameCandidate,
+  confirmsRename,
+  isSameCharacter,
+  OUTCOMES,
+  DAY_MS,
+};

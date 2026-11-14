@@ -3,14 +3,20 @@ const {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  LabelBuilder,
   MessageFlags,
+  ModalBuilder,
   PermissionsBitField,
+  TextInputBuilder,
+  TextInputStyle,
   escapeMarkdown,
 } = require("discord.js");
 const { getConfig } = require("./config");
 const { getStore } = require("./store");
-const { grantAccess, revokeAccess } = require("./access");
+const { grantAccess, revokeAccess, applyCharacterRoles, applyNickname, canRename } = require("./access");
 const { isStaff } = require("./tickets");
+const { lookupCharacter } = require("./lookup");
+const { decideRename, offersRename } = require("./rules");
 const {
   COLORS,
   reasonText,
@@ -22,17 +28,30 @@ const {
 
 const APPROVE_PREFIX = "verify:approve:";
 const DENY_PREFIX = "verify:deny:";
+const RENAME_PREFIX = "verify:rename:";
+const RENAME_MODAL_PREFIX = "verify:renameform:";
+const RENAME_INPUT_ID = "new_name";
 
 function isRecheckCase(reviewCase) {
   return reviewCase.reason.startsWith("recheck_");
 }
 
-function reviewButtons(caseId, recheck = false) {
+function canReview(member) {
+  return isStaff(member) || member.permissions.has(PermissionsBitField.Flags.ManageRoles);
+}
+
+function reviewButtons(caseId, { recheck = false, rename = false } = {}) {
+  const keepButton = rename
+    ? new ButtonBuilder()
+        .setCustomId(`${RENAME_PREFIX}${caseId}`)
+        .setLabel("Rename")
+        .setStyle(ButtonStyle.Primary)
+    : new ButtonBuilder()
+        .setCustomId(`${APPROVE_PREFIX}${caseId}`)
+        .setLabel(recheck ? "Keep verified" : "Approve")
+        .setStyle(ButtonStyle.Success);
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`${APPROVE_PREFIX}${caseId}`)
-      .setLabel(recheck ? "Keep verified" : "Approve")
-      .setStyle(ButtonStyle.Success),
+    keepButton,
     new ButtonBuilder()
       .setCustomId(`${DENY_PREFIX}${caseId}`)
       .setLabel(recheck ? "Unverify" : "Deny")
@@ -77,9 +96,13 @@ function buildReviewEmbed(reviewCase, { accountAgeDays, lookupError, details } =
 async function openReviewCase(client, { discordId, charName, reason, character, context }) {
   const store = getStore();
   const reviewCase = store.createReviewCase({ discordId, charName, reason, character });
+  const buttons = reviewButtons(reviewCase.id, {
+    recheck: isRecheckCase(reviewCase),
+    rename: offersRename(reason, store.getVerification(discordId)),
+  });
   const message = await postToChannel(client, getConfig().reviewChannelId, {
     embeds: [buildReviewEmbed(reviewCase, context)],
-    components: [reviewButtons(reviewCase.id, isRecheckCase(reviewCase))],
+    components: [buttons],
   });
   if (message) {
     store.setReviewMessage(reviewCase.id, message.channelId, message.id);
@@ -232,15 +255,113 @@ async function deny(interaction, reviewCase) {
   );
 }
 
+function buildRenameModal(reviewCase) {
+  return new ModalBuilder()
+    .setCustomId(`${RENAME_MODAL_PREFIX}${reviewCase.id}`)
+    .setTitle("Rename member")
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel("New character name")
+        .setDescription(`What ${reviewCase.char_name ?? "the character"} is called now`.slice(0, 100))
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId(RENAME_INPUT_ID)
+            .setStyle(TextInputStyle.Short)
+            .setMinLength(1)
+            .setMaxLength(getConfig().maxNameLength)
+            .setRequired(true)
+        )
+    );
+}
+
+function renameProblem(reason, name, { lookup, charClaim }) {
+  const shown = `**${escapeMarkdown(name)}**`;
+  const messages = {
+    no_saved_id: "There's no saved character ID for this member, so I can't confirm it's the same character.",
+    invalid_name: `${shown} isn't a valid character name.`,
+    not_found: `${shown} wasn't found. Check the spelling.`,
+    unavailable: `Couldn't look up ${shown} right now (${lookup.reason}). Try again in a bit.`,
+    different_character: `${shown} is a different character, not the one this member verified with. Nothing changed.`,
+    wrong_faction: `${shown} is the same character, but it's now ${lookup.character?.faction}. Use Unverify if they should lose access.`,
+    wrong_server: `${shown} is the same character, but it's now on ${lookup.character?.server}. Use Unverify if they should lose access.`,
+    name_already_claimed: `${shown} is already claimed by <@${charClaim?.discord_id}>.`,
+  };
+  return messages[reason] ?? reason;
+}
+
+async function handleRenameSubmit(interaction) {
+  if (!canReview(interaction.member)) {
+    return interaction.reply({
+      content: "Only officers, moderators or members with Manage Roles can review verifications.",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  const store = getStore();
+  const reviewCase = store.getReviewCase(Number(interaction.customId.slice(RENAME_MODAL_PREFIX.length)));
+  if (!reviewCase || reviewCase.status !== "open") {
+    return interaction.reply({
+      content: "Another moderator already handled this case.",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const newName = interaction.fields.getTextInputValue(RENAME_INPUT_ID).trim();
+  const claim = store.getVerification(reviewCase.discord_id);
+  if (!claim) {
+    return interaction.editReply("This member is no longer verified, so there's nothing to rename.");
+  }
+  const lookup = await lookupCharacter(newName, { fresh: true });
+  const charClaim = lookup.status === "found" ? store.getVerificationByCharName(lookup.character.name) : null;
+  const decision = decideRename({ claim, lookup, charClaim, config: getConfig() });
+  if (!decision.ok) {
+    return interaction.editReply(renameProblem(decision.reason, newName, { lookup, charClaim }));
+  }
+
+  const character = lookup.character;
+  if (!store.resolveReviewCase(reviewCase.id, "approved", interaction.user.id)) {
+    return interaction.editReply("Another moderator already handled this case.");
+  }
+  store.updateClaimDetails(reviewCase.discord_id, character);
+  const member = await interaction.guild.members.fetch(reviewCase.discord_id).catch(() => null);
+  const problems = [];
+  if (member) {
+    problems.push(...(await applyCharacterRoles(member, character)));
+    if (canRename(member)) problems.push(...(await applyNickname(member, character.name, character)));
+  } else {
+    problems.push("member is no longer in the server");
+  }
+
+  const oldName = escapeMarkdown(claim.char_name);
+  const shownName = escapeMarkdown(character.name);
+  await closeReviewMessage(interaction, {
+    color: COLORS.green,
+    footer: `Renamed to ${character.name} by ${interaction.user.tag}`,
+  });
+  await postLog(
+    interaction.client,
+    buildEventEmbed({
+      color: problems.length ? COLORS.yellow : COLORS.green,
+      title: `Renamed by mod (review #${reviewCase.id})`,
+      description: `<@${reviewCase.discord_id}> **${oldName}** → **${shownName}**, renamed by <@${interaction.user.id}>`,
+      fields: problems.length ? [{ name: "Problems", value: problems.join("\n") }] : [],
+    })
+  );
+  return interaction.editReply(
+    `Renamed **${oldName}** to **${shownName}**.` + (problems.length ? ` But: ${problems.join("; ")}` : "")
+  );
+}
+
 function isReviewButton(customId) {
-  return customId.startsWith(APPROVE_PREFIX) || customId.startsWith(DENY_PREFIX);
+  return [APPROVE_PREFIX, DENY_PREFIX, RENAME_PREFIX].some((prefix) => customId.startsWith(prefix));
+}
+
+function isRenameModal(customId) {
+  return customId.startsWith(RENAME_MODAL_PREFIX);
 }
 
 async function handleReviewButton(interaction) {
-  if (
-    !isStaff(interaction.member) &&
-    !interaction.member.permissions.has(PermissionsBitField.Flags.ManageRoles)
-  ) {
+  if (!canReview(interaction.member)) {
     return interaction.reply({
       content: "Only officers, moderators or members with Manage Roles can review verifications.",
       flags: MessageFlags.Ephemeral,
@@ -263,6 +384,9 @@ async function handleReviewButton(interaction) {
     });
   }
 
+  if (interaction.customId.startsWith(RENAME_PREFIX)) {
+    return interaction.showModal(buildRenameModal(reviewCase));
+  }
   await interaction.deferUpdate();
   return isApprove ? approve(interaction, reviewCase) : deny(interaction, reviewCase);
 }
@@ -287,5 +411,7 @@ module.exports = {
   openReviewCase,
   isReviewButton,
   handleReviewButton,
+  isRenameModal,
+  handleRenameSubmit,
   closeReviewCaseAsApproved,
 };

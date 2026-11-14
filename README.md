@@ -270,7 +270,7 @@ The bot needs a raid-helper event that hasn't started yet, and `FORCE_LEADER_ROL
 | `/verify-manual` | Verify someone by hand with their character name (also closes their open ticket or review case) | Manage Roles |
 | `/unverify` | Take away someone's Verified role, nickname and character | Manage Roles |
 | `/whois-char` | Post who owns a character, or which character someone has, with a link to their character page and account age | Manage Roles |
-| `/recheck-members` | Look up verified members' characters again: updates legion and class roles and the gear score in nicknames, and sends anyone renamed, transferred or on the wrong faction to the review channel. Pick a `user` to check one person, or leave it empty for everyone (runs in the background, results in the log channel). | Manage Roles |
+| `/recheck-members` | Look up verified members' characters again: updates legion and class roles and the gear score in nicknames, and sends anyone renamed, transferred or on the wrong faction to the review channel. Renames are usually handled by themselves: if shugo.gg shows a new name for the old one and aion2index confirms it's the same character, the member is renamed without a review. If their character name can't be found any more, the review has a **Rename** button: type the new name, and if it's the same character (same character ID) the bot updates their saved name, nickname and roles. Pick a `user` to check one person, or leave it empty for everyone (runs in the background, results in the log channel). | Manage Roles |
 | `/verify-config` | See the settings, turn strict verification on or off, or change the min level, gear score, account age or how long archived tickets are kept | Manage Roles |
 
 ### Mod tools

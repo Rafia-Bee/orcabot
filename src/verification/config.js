@@ -1,6 +1,8 @@
 const fs = require("fs");
 const path = require("path");
 const { isValidTimeZone } = require("../time");
+const { parseRoleMap, importsFromEnv, missingRequired, toConfigFields } = require("../settings/ids");
+const { getStore } = require("./store");
 
 function intFromEnv(key, fallback) {
   const raw = process.env[key];
@@ -47,23 +49,6 @@ function requiredFromEnv(missing) {
       return items;
     },
   };
-}
-
-function parseRoleMap(raw, setting) {
-  if (!raw || raw.trim() === "") return [];
-  return raw
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .map((entry) => {
-      const separator = entry.lastIndexOf(":");
-      const name = entry.slice(0, separator).trim();
-      const roleId = entry.slice(separator + 1).trim();
-      if (separator < 1 || !name || !/^\d+$/.test(roleId)) {
-        throw new Error(`${setting} entry "${entry}" must look like Name:roleId`);
-      }
-      return { name, roleId };
-    });
 }
 
 function parseLegionRoles(raw) {
@@ -192,31 +177,16 @@ function loadConfig() {
     if (intFromEnv(key, 1) < 1) throw new Error(`${key} must be at least 1`);
   }
 
+  const ids = toConfigFields(getStore().getServerSettings());
+
   return {
     mode,
     grantDelayMinSeconds,
     grantDelayMaxSeconds,
-    verifiedRoleId: process.env.VERIFIED_ROLE_ID,
-    verifyChannelId: process.env.VERIFY_CHANNEL_ID,
-    logChannelId: process.env.VERIFY_LOG_CHANNEL_ID,
-    reviewChannelId: process.env.VERIFY_REVIEW_CHANNEL_ID,
-    officersRoleId: process.env.OFFICERS_ROLE_ID,
-    moderatorRoleId: process.env.MODERATOR_ROLE_ID?.trim() || null,
-    ticketsCategoryId: process.env.REVIEW_TICKETS_CATEGORY_ID,
-    archivedTicketsCategoryId: process.env.ARCHIVED_REVIEW_TICKETS_CATEGORY_ID,
-    legionRoles: parseLegionRoles(process.env.LEGION_ROLES),
-    guestRoleId: process.env.GUEST_ROLE_ID?.trim() || null,
-    classRoles: parseClassRoles(process.env.CLASS_ROLES),
-    forceLeaderRoleId: process.env.FORCE_LEADER_ROLE_ID?.trim() || null,
-    mee6TicketParentIds: (process.env.MEE6_TICKET_PARENT_IDS ?? "")
-      .split(",")
-      .map((id) => id.trim())
-      .filter(Boolean),
+    ...ids,
     mee6TicketRenames: parseTicketRenames(process.env.MEE6_TICKET_RENAMES),
     roster: {
-      forceVcCategoryId: process.env.FORCE_VC_CATEGORY_ID?.trim() || null,
-      channelId: process.env.ROSTER_CHANNEL_ID?.trim() || null,
-      generalChannelId: process.env.ROSTER_GENERAL_CHANNEL_ID?.trim() || null,
+      ...ids.roster,
       raidHelperApiKey: process.env.RAID_HELPER_API_KEY?.trim() || null,
     },
     ...requirements,
@@ -235,19 +205,8 @@ function loadConfig() {
   };
 }
 
-function missingKeys(config) {
-  const required = {
-    VERIFIED_ROLE_ID: config.verifiedRoleId,
-    VERIFY_CHANNEL_ID: config.verifyChannelId,
-    VERIFY_LOG_CHANNEL_ID: config.logChannelId,
-    VERIFY_REVIEW_CHANNEL_ID: config.reviewChannelId,
-    OFFICERS_ROLE_ID: config.officersRoleId,
-    REVIEW_TICKETS_CATEGORY_ID: config.ticketsCategoryId,
-    ARCHIVED_REVIEW_TICKETS_CATEGORY_ID: config.archivedTicketsCategoryId,
-  };
-  return Object.entries(required)
-    .filter(([, value]) => !value)
-    .map(([key]) => key);
+function missingKeys() {
+  return missingRequired(getStore().getServerSettings()).map((setting) => setting.label);
 }
 
 let cachedConfig = null;
@@ -255,6 +214,18 @@ let cachedConfig = null;
 function getConfig() {
   if (!cachedConfig) cachedConfig = loadConfig();
   return cachedConfig;
+}
+
+function clearConfigCache() {
+  cachedConfig = null;
+}
+
+function importIdSettingsFromEnv() {
+  const imported = getStore().importServerSettingsOnce(importsFromEnv(process.env));
+  if (imported?.length) {
+    console.log(`Copied these settings from .env into the database (change them with /settings): ${imported.join(", ")}`);
+  }
+  cachedConfig = null;
 }
 
 const ENV_PATH = process.env.ENV_FILE || path.join(__dirname, "..", "..", ".env");
@@ -301,6 +272,8 @@ module.exports = {
   loadConfig,
   getConfig,
   missingKeys,
+  clearConfigCache,
+  importIdSettingsFromEnv,
   parseLegionRoles,
   parseClassRoles,
   parseLookupSources,

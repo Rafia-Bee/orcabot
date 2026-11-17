@@ -85,7 +85,7 @@ async function renameTicket(channel, renames) {
 function watchMee6Tickets(client) {
   const { mee6TicketParentIds: parentIds, mee6TicketRenames: renames } = getConfig();
   if (parentIds.length === 0) {
-    console.log("MEE6 ticket lookups: off (MEE6_TICKET_PARENT_IDS not set)");
+    console.log("MEE6 ticket lookups: off (MEE6 ticket places not set in /settings)");
     return;
   }
   console.log(`MEE6 ticket lookups: watching ${parentIds.join(", ")}`);

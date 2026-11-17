@@ -24,7 +24,7 @@ module.exports = {
     const cfg = getConfig();
     if (!cfg.roster.forceVcCategoryId || !cfg.roster.channelId) {
       return interaction.reply({
-        content: "Set FORCE_VC_CATEGORY_ID and ROSTER_CHANNEL_ID in .env first.",
+        content: "Set the Force voice category and Roster channel in /settings first.",
         flags: MessageFlags.Ephemeral,
       });
     }

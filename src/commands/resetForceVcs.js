@@ -17,7 +17,7 @@ module.exports = {
     }
     if (!getConfig().roster.forceVcCategoryId) {
       return interaction.reply({
-        content: "Set FORCE_VC_CATEGORY_ID in .env first.",
+        content: "Set the Force voice category in /settings first.",
         flags: MessageFlags.Ephemeral,
       });
     }

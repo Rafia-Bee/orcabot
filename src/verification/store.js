@@ -99,6 +99,13 @@ CREATE TABLE IF NOT EXISTS timeslots (
 CREATE UNIQUE INDEX IF NOT EXISTS timeslots_one_per_user
   ON timeslots (board_id, user_id) WHERE user_id IS NOT NULL;
 
+CREATE TABLE IF NOT EXISTS server_settings (
+  key              TEXT PRIMARY KEY,
+  value            TEXT NOT NULL,
+  updated_by       TEXT,
+  updated_at       INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS user_timezones (
   user_id          TEXT PRIMARY KEY,
   time_zone        TEXT NOT NULL
@@ -250,6 +257,15 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
       INSERT INTO bot_state (key, value) VALUES (?, ?)
       ON CONFLICT (key) DO UPDATE SET value = excluded.value
     `),
+
+    serverSettings: db.prepare("SELECT key, value FROM server_settings"),
+    serverSetting: db.prepare("SELECT value FROM server_settings WHERE key = ?"),
+    setServerSetting: db.prepare(`
+      INSERT INTO server_settings (key, value, updated_by, updated_at) VALUES (?, ?, ?, ?)
+      ON CONFLICT (key) DO UPDATE SET
+        value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at
+    `),
+    deleteServerSetting: db.prepare("DELETE FROM server_settings WHERE key = ?"),
 
     insertTimeslotBoard: db.prepare(`
       INSERT INTO timeslot_boards (raid_event_id, title, guild_id, channel_id, event_start, created_by, created_at)
@@ -481,6 +497,29 @@ function openStore(dbPath = process.env.VERIFY_DB_PATH || DEFAULT_DB_PATH) {
 
     getState(key) {
       return stmt.state.get(key)?.value ?? null;
+    },
+
+    getServerSettings() {
+      return Object.fromEntries(stmt.serverSettings.all().map((row) => [row.key, JSON.parse(row.value)]));
+    },
+
+    setServerSetting(key, value, updatedBy, now = Date.now()) {
+      if (value == null) stmt.deleteServerSetting.run(key);
+      else stmt.setServerSetting.run(key, JSON.stringify(value), updatedBy, now);
+    },
+
+    importServerSettingsOnce(entries, now = Date.now()) {
+      return db.transaction(() => {
+        if (stmt.state.get("server_settings_imported")) return null;
+        const imported = [];
+        for (const { key, value } of entries) {
+          if (stmt.serverSetting.get(key)) continue;
+          stmt.setServerSetting.run(key, JSON.stringify(value), "imported from .env", now);
+          imported.push(key);
+        }
+        stmt.setState.run("server_settings_imported", String(now));
+        return imported;
+      })();
     },
 
     setState(key, value) {

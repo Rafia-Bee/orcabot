@@ -388,12 +388,12 @@ function onReady(client) {
   console.log(
     cfg.legionRoles.length || cfg.guestRoleId
       ? `Legion roles: ${cfg.legionRoles.map((l) => l.name).join(", ")}${cfg.guestRoleId ? ", Guest for everyone else" : ""}`
-      : "Legion roles: off (LEGION_ROLES and GUEST_ROLE_ID not set)"
+      : "Legion roles: off (Legion roles and Guest role not set in /settings)"
   );
   console.log(
     cfg.classRoles.length
       ? `Class roles: ${cfg.classRoles.map((c) => c.name).join(", ")}`
-      : "Class roles: off (CLASS_ROLES not set)"
+      : "Class roles: off (not set in /settings)"
   );
   startGrantSweeper(client);
   startArchiveCleanup(client);

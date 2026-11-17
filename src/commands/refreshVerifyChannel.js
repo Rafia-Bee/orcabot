@@ -31,10 +31,10 @@ module.exports = {
     }
 
     const config = getConfig();
-    const missing = missingKeys(config);
+    const missing = missingKeys();
     if (missing.length > 0) {
       return interaction.reply({
-        content: `Verification isn't configured. Missing in .env: ${missing.join(", ")}`,
+        content: `Verification isn't set up yet. Missing: ${missing.join(", ")}. Set them with /settings.`,
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -56,7 +56,7 @@ module.exports = {
     } catch (error) {
       console.error("refresh-verify-channel failed:", error);
       return interaction.editReply(
-        `Couldn't refresh the verify channel: ${error.message}. Check VERIFY_CHANNEL_ID and that I can view, read history and send messages there.`
+        `Couldn't refresh the verify channel: ${error.message}. Check the Verify channel in /settings and that I can view, read history and send messages there.`
       );
     }
 

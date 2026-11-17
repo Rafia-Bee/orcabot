@@ -45,7 +45,7 @@ module.exports = {
     }
     const cfg = getConfig();
     if (!cfg.forceLeaderRoleId) {
-      return interaction.reply({ content: "Set FORCE_LEADER_ROLE_ID in .env first.", flags: MessageFlags.Ephemeral });
+      return interaction.reply({ content: "Set the Force Leader role in /settings first.", flags: MessageFlags.Ephemeral });
     }
     const eventId = parseRaidHelperId(interaction.options.getString("event"));
     if (!eventId) {

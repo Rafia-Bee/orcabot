@@ -33,7 +33,7 @@ In the [Developer Portal](https://discord.com/developers/applications), open you
 
 Copy `.env.example` to a new file called `.env` and fill in the blanks. Every line has a comment explaining what it's for.
 
-To copy IDs, turn on **Developer Mode** in Discord (**User Settings → Advanced**), then right-click a server, channel, category, role or user and pick **Copy ID**.
+To copy an ID, turn on **Developer Mode** in Discord (**User Settings → Advanced**), then right-click the server or a user and pick **Copy ID**. You don't need IDs for channels or roles: you pick those in Discord with `/settings` once the bot is running (step 6).
 
 You'll need:
 
@@ -43,24 +43,8 @@ You'll need:
 | `CLIENT_ID` | Developer Portal → **General Information** → **Application ID** |
 | `GUILD_ID` | Your server's ID |
 | `BOT_OWNER_ID` | Your own user ID (lets you use `/stfu`) |
-| `VERIFIED_ROLE_ID` | The role that unlocks the server |
-| `OFFICERS_ROLE_ID` | The role that handles review tickets |
-| `MODERATOR_ROLE_ID` | *(optional)* A second staff role that can also handle tickets and the review channel |
-| `LEGION_ROLES` | *(optional)* Your alliance legions and their roles, like `Aegis:<role id>,SDC:<role id>`. The names must match the game. |
-| `GUEST_ROLE_ID` | *(optional)* The role for verified members who aren't in one of those legions |
-| `CLASS_ROLES` | *(optional)* Class roles, like `Ranger:<role id>,Chanter:<role id>` (Gladiator, Templar, Assassin, Ranger, Sorcerer, Spiritmaster, Cleric, Chanter) |
-| `VERIFY_CHANNEL_ID` | Where new members click **Verify** |
-| `VERIFY_LOG_CHANNEL_ID` | Mods-only log of everything the bot does |
-| `VERIFY_REVIEW_CHANNEL_ID` | Mods-only channel for cases that need a human |
-| `REVIEW_TICKETS_CATEGORY_ID` | Category for open review tickets |
-| `ARCHIVED_REVIEW_TICKETS_CATEGORY_ID` | Category closed tickets get moved to |
-| `MEE6_TICKET_PARENT_IDS` | *(optional)* Where MEE6 opens tickets: the channel its ticket threads appear in, or the category its ticket channels go in. When a ticket opens, the bot posts the opener's character, gear and account age in it. |
 | `AION2INDEX_API_KEY` | *(needed for aion2index lookups)* Your API key from the [aion2index community panel](https://aion2index.com/communities/docs). See [Character lookup sites](#character-lookup-sites). |
 | `MEE6_TICKET_RENAMES` | *(optional)* Rename MEE6 tickets by type, like `Force Leader:force,Class Master:master`. If the channel topic MEE6 sets contains the phrase, `0001-name` becomes `force-name`. |
-| `FORCE_LEADER_ROLE_ID` | *(optional)* The Force Leader role. Gives the `FL - <combat power> - <name>` nickname, `/announce-roster` uses it to find each force's leader, and `/create-timeslots` needs it. |
-| `FORCE_VC_CATEGORY_ID` | *(needed for force rosters)* The category with the force voice channels. See [Force rosters](#force-rosters). |
-| `ROSTER_CHANNEL_ID` | *(needed for force rosters)* Where `/announce-roster` posts each force's pings |
-| `ROSTER_GENERAL_CHANNEL_ID` | *(optional)* The channel members are told to ping their Force Leader in when they can't make it |
 | `RAID_HELPER_API_KEY` | *(optional)* Your raid-helper API key (`/apikey`). Comps load without it. |
 
 The rest (faction, server, level and gear score requirements, and so on) already have sensible values. It's worth setting `SHUGO_HEALTHCHECK_CHARACTER` to your own character: the bot looks it up on every lookup site on startup and warns you in the log channel if one of them stops working.
@@ -86,7 +70,43 @@ npm start
 
 You should see `Logged in as ...`. Run `node deploy-commands.js` again whenever the bot gets new commands.
 
-### 6. Post the Verify button
+### 6. Pick the channels and roles
+
+Run `/settings` in Discord. Only server admins (people with **Manage Server**) can use it, and only you see the reply.
+
+1. The list shows every setting, what's still **Missing**, and any **Problems**.
+2. Pick a setting from the **Change a setting** list.
+3. Pick the role, channel or category from Discord's own list. It's saved straight away, and you're back at the overview. **Clear** removes an optional setting.
+4. For **Legion roles** and **Class roles**, press **Add or change**, type the name as the game spells it and pick its role. Use the **Remove** list to take one off.
+
+Every change is posted in the log channel, with who changed it.
+
+| Setting | What it is |
+| --- | --- |
+| Verified role | The role that unlocks the server |
+| Officers role | The role that handles review tickets |
+| Moderator role | *(optional)* A second staff role that can also handle tickets and the review channel |
+| Guest role | *(optional)* The role for verified members who aren't in one of the legions |
+| Legion roles | *(optional)* Your alliance legions and their roles. The names must match the game. |
+| Class roles | *(optional)* Each class and its role (Gladiator, Templar, Assassin, Ranger, Sorcerer, Spiritmaster, Cleric, Chanter) |
+| Force Leader role | *(optional)* Gives the `FL - <combat power> - <name>` nickname. `/announce-roster` uses it to find each force's leader, and `/create-timeslots` needs it. |
+| Verify channel | Where new members click **Verify** |
+| Log channel | Mods-only log of everything the bot does |
+| Review channel | Mods-only channel for cases that need a person to look |
+| Tickets category | Category for open review tickets |
+| Archive category | Category closed tickets get moved to |
+| MEE6 ticket places | *(optional)* Where MEE6 opens tickets: the channel its ticket threads appear in, or the category its ticket channels go in. When a ticket opens, the bot posts the opener's character, gear and account age in it. Restart the bot after changing this. |
+| Force voice category | *(needed for force rosters)* The category with the force voice channels. See [Force rosters](#force-rosters). |
+| Roster channel | *(needed for force rosters)* Where `/announce-roster` posts each force's pings |
+| General channel | *(optional)* The channel members are told to ping their Force Leader in when they can't make it |
+
+Under **Problems**, the bot warns you when a role or channel you picked was deleted, or when a role it hands out sits above its own role (see **Role order** in step 4).
+
+The choices are saved in the bot's database (`data/orcabot.db`, or `/data/orcabot.db` on Fly.io), not in `.env`. `npm run db:reset` wipes them too.
+
+**Coming from an older version?** If your `.env` still has lines like `VERIFIED_ROLE_ID=`, the bot copies them into the database the first time it starts with `/settings`, and says so in its log. After that it ignores those lines, so you can delete them.
+
+### 7. Post the Verify button
 
 Run `/verify-setup` in Discord. The bot posts the Verify message in your verify channel.
 
@@ -139,6 +159,7 @@ That's it. Pushes to `main` now deploy automatically (you can watch them in the 
 
 - **See what the bot is doing:** `fly logs`
 - **Restart it:** `fly apps restart orcabot`
+- **Change a channel, category or role:** use `/settings` in Discord. No restart needed.
 - **Change a setting that `/verify-config` can't:** the copy on Fly.io is the live one, since mods' `/verify-config` changes are saved there. So download it, edit it, and put it back:
   ```bash
   fly ssh sftp get /data/.env server.env
@@ -160,7 +181,7 @@ That's it. Pushes to `main` now deploy automatically (you can watch them in the 
    - **Wrong faction or server:** they're turned away.
    - **Typo or unknown name:** they're asked to try again.
    - **Anything unusual** (the character's already claimed by someone else, or every lookup site is down): it goes to the review channel with **Approve** and **Deny** buttons.
-3. Along with `Verified`, members get their legion's role (or Guest if their legion isn't in the alliance) and their class role, if `LEGION_ROLES` / `GUEST_ROLE_ID` / `CLASS_ROLES` are set. If someone changes legion or class, run `/recheck-members` (for them or everyone) to update the roles.
+3. Along with `Verified`, members get their legion's role (or Guest if their legion isn't in the alliance) and their class role, if Legion roles, Guest role and Class roles are set in `/settings`. If someone changes legion or class, run `/recheck-members` (for them or everyone) to update the roles.
 4. Each character can only belong to one Discord account. The bot remembers each character's aion2index ID, so this still holds after a rename, and members who rename their character can verify again with the new name.
 5. Archived tickets are deleted after 7 days without messages.
 6. If a flood of Verify requests comes in at once (a raid), the bot pauses verification for a few minutes and warns the mods. Members are asked to try again shortly.
@@ -248,7 +269,7 @@ Mods can change both numbers with `/verify-config`.
 
 Running the command again for the same event links you to the board that's already there. Add `replace:True` to start over. Everyone's picks are lost, and the old board says it was replaced.
 
-The bot needs a raid-helper event that hasn't started yet, and `FORCE_LEADER_ROLE_ID` must be set.
+The bot needs a raid-helper event that hasn't started yet, and the Force Leader role must be set in `/settings`.
 
 ## Commands
 
@@ -271,6 +292,7 @@ The bot needs a raid-helper event that hasn't started yet, and `FORCE_LEADER_ROL
 | `/unverify` | Take away someone's Verified role, nickname and character | Manage Roles |
 | `/whois-char` | Post who owns a character, or which character someone has, with a link to their character page and account age | Manage Roles |
 | `/recheck-members` | Look up verified members' characters again: updates legion and class roles and the gear score in nicknames, and sends anyone renamed, transferred or on the wrong faction to the review channel. Renames are usually handled by themselves: if shugo.gg shows a new name for the old one and aion2index confirms it's the same character, the member is renamed without a review. If their character name can't be found any more, the review has a **Rename** button: type the new name, and if it's the same character (same character ID) the bot updates their saved name, nickname and roles. Pick a `user` to check one person, or leave it empty for everyone (runs in the background, results in the log channel). | Manage Roles |
+| `/settings` | Pick the channels, categories and roles the bot uses | Manage Server |
 | `/verify-config` | See the settings, turn strict verification on or off, or change the min level, gear score, account age or how long archived tickets are kept | Manage Roles |
 
 ### Mod tools
@@ -293,6 +315,7 @@ The bot needs a raid-helper event that hasn't started yet, and `FORCE_LEADER_ROL
 ## Testing
 
 - `npm run dev`: starts the bot with a blank slate every time. Nothing is saved, and members can retry straight away.
+  Because nothing is saved, `/settings` choices are lost when it stops too. Each time it starts, it copies the channel and role lines from your local `.env` (like `VERIFIED_ROLE_ID=`), so keep those lines in your local `.env` for testing.
 - `npm run db:reset`: wipes the bot's saved data (stop the bot first).
 - `npm test`: runs the automated checks.
 
@@ -305,6 +328,8 @@ Saved data doesn't include Discord itself. Test accounts keep their roles and ni
 - **"Missing Permissions":** move the bot's role higher (step 4) and check it has the permissions from step 2.
 - **"Used disallowed intents":** turn on **Server Members Intent** (step 2).
 - **The bot won't start and lists missing settings:** fill those in `.env`.
+- **"Verification isn't set up yet. Missing: ...":** pick those in `/settings`.
+- **A role isn't given out, or `/settings` shows a problem:** open `/settings` and read the **Problems** list. Usually the role was deleted (pick the new one) or the bot's role needs moving higher (step 4).
 - **Invalid token:** reset it in the Developer Portal and update `BOT_TOKEN`.
 
 ## License

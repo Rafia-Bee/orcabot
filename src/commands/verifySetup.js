@@ -30,10 +30,10 @@ module.exports = {
     }
 
     const config = getConfig();
-    const missing = missingKeys(config);
+    const missing = missingKeys();
     if (missing.length > 0) {
       return interaction.reply({
-        content: `Verification isn't configured. Missing in .env: ${missing.join(", ")}`,
+        content: `Verification isn't set up yet. Missing: ${missing.join(", ")}. Set them with /settings.`,
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -46,7 +46,7 @@ module.exports = {
       console.error("verify-setup failed:", error);
       return interaction.reply({
         content:
-          "Couldn't post in the verify channel. Check VERIFY_CHANNEL_ID and that I can view and send messages there.",
+          "Couldn't post in the verify channel. Check the Verify channel in /settings and that I can view and send messages there.",
         flags: MessageFlags.Ephemeral,
       });
     }

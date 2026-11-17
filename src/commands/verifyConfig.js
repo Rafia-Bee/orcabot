@@ -43,14 +43,14 @@ function parseValue(setting, raw) {
 function buildSettingsEmbed() {
   const cfg = getConfig();
   const pause = getPauseState();
-  const missing = missingKeys(cfg);
+  const missing = missingKeys();
   return new EmbedBuilder()
     .setColor(COLORS.blue)
     .setTitle("Verification settings")
     .setDescription(
       "Change the settings in the `setting` list with `/verify-config setting value`. " +
-        "Everything else: edit .env and restart the bot." +
-        (missing.length ? `\n\n**Missing:** ${missing.join(", ")}` : "")
+        "Channels and roles: /settings. Everything else: edit .env and restart the bot." +
+        (missing.length ? `\n\n**Missing:** ${missing.join(", ")} (set them with /settings)` : "")
     )
     .addFields(
       { name: "Mode", value: cfg.mode, inline: true },
@@ -110,13 +110,13 @@ function buildSettingsEmbed() {
                 ...cfg.legionRoles.map((l) => `${l.name} → ${role(l.roleId)}`),
                 `No matching legion → ${role(cfg.guestRoleId)}`,
               ].join("\n")
-            : "off (set LEGION_ROLES and GUEST_ROLE_ID in .env)",
+            : "off (set Legion roles and Guest role in /settings)",
       },
       {
         name: "Class roles",
         value: cfg.classRoles.length
           ? cfg.classRoles.map((c) => `${c.name} → ${role(c.roleId)}`).join("\n")
-          : "off (set CLASS_ROLES in .env)",
+          : "off (set Class roles in /settings)",
       },
       { name: "Ticket gear slots", value: cfg.ticketGearSlots.join(", ") },
       {

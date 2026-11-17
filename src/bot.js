@@ -7,6 +7,7 @@ const {
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config({ path: process.env.ENV_FILE });
+require("./verification/config").importIdSettingsFromEnv();
 
 const client = new Client({
   intents: [
@@ -72,7 +73,7 @@ client.on("interactionCreate", async (interaction) => {
   }
 
   // Handle button, select menu and modal interactions
-  if (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) {
+  if (interaction.isButton() || interaction.isAnySelectMenu() || interaction.isModalSubmit()) {
     const handler = client.componentHandlers.get(
       interaction.customId.split(":")[0]
     );

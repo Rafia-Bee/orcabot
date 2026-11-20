@@ -1,6 +1,14 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { parseRaidHelperId, buildForces, channelKey, rosterMessages, missingFromVoice } = require("../src/roster/comp");
+const {
+  parseRaidHelperId,
+  buildForces,
+  channelKey,
+  rosterMessages,
+  missingFromVoice,
+  forceRoleName,
+  forceRoleChanges,
+} = require("../src/roster/comp");
 
 const groups = Array.from({ length: 12 }, (_, i) => ({
   name: `Group ${i + 1}`,
@@ -119,4 +127,42 @@ test("long rosters are split under Discord's 2000 character limit", () => {
   assert.ok(messages.length > 1);
   assert.ok(messages.every((m) => m.length <= 2000));
   assert.equal(messages.join(" ").match(/<@\d{18}>/g).length, 120);
+});
+
+test("force role names drop the voice channel's leading and trailing symbols", () => {
+  assert.equal(forceRoleName("🔊・Force 1"), "Force 1");
+  assert.equal(forceRoleName("Force 2 (Backline)"), "Force 2 (Backline)");
+  assert.equal(channelKey(forceRoleName("🔊 Force 3 🔊")), channelKey("🔊 Force 3 🔊"));
+});
+
+test("force roles move to match the new roster and other roles are left alone", () => {
+  const forceRoleIds = new Set(["A", "B"]);
+  const wanted = new Map([
+    ["new", "A"],
+    ["moved", "A"],
+    ["stays", "B"],
+  ]);
+  const current = new Map([
+    ["new", ["verified"]],
+    ["moved", ["verified", "B"]],
+    ["stays", ["verified", "B"]],
+    ["dropped", ["verified", "A"]],
+    ["outsider", ["verified"]],
+  ]);
+  assert.deepEqual(forceRoleChanges(wanted, current, forceRoleIds), [
+    { memberId: "new", add: "A", remove: [] },
+    { memberId: "moved", add: "A", remove: ["B"] },
+    { memberId: "dropped", add: null, remove: ["A"] },
+  ]);
+});
+
+test("a reset takes every force role off everyone", () => {
+  const current = new Map([
+    ["1", ["A", "x"]],
+    ["2", ["A", "B"]],
+  ]);
+  assert.deepEqual(forceRoleChanges(new Map(), current, new Set(["A", "B"])), [
+    { memberId: "1", add: null, remove: ["A"] },
+    { memberId: "2", add: null, remove: ["A", "B"] },
+  ]);
 });

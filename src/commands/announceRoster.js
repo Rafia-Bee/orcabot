@@ -1,3 +1,12 @@
+// /announce-roster: previews a raid-helper comp's forces, then gives out the force roles and pings each force.
+//   prunePreviews     forgets previews that have expired
+//   clip              shortens text to fit an embed field
+//   groupRange        "groups 1-4" for a force's parties
+//   describeForce     one force's preview lines
+//   buildPreviewEmbed the private preview shown before anything changes
+//   previewButtons    the Post roster and Cancel buttons
+//   describeResult    the summary shown after posting
+//   handleComponent   handles the Post roster and Cancel buttons
 const crypto = require("crypto");
 const {
   SlashCommandBuilder,
@@ -59,7 +68,7 @@ function buildPreviewEmbed(plan) {
     .setColor(COLORS.blue)
     .setTitle(`Roster preview: ${plan.title}`)
     .setDescription(
-      `Nothing has changed yet. **Post roster** gives each member access to their force's voice channel only, ` +
+      `Nothing has changed yet. **Post roster** gives each member their force role, which opens their force's voice channel, ` +
         `and posts the pings in <#${cfg.roster.channelId}>.`
     );
   for (const force of active.slice(0, MAX_FIELDS)) {
@@ -67,12 +76,12 @@ function buildPreviewEmbed(plan) {
   }
   const notes = [];
   if (active.length > MAX_FIELDS) notes.push(`${active.length - MAX_FIELDS} more forces not shown.`);
-  if (empty.length) notes.push(`Empty forces (their voice channels get closed): ${empty.map((f) => f.name).join(", ")}`);
+  if (empty.length) notes.push(`Empty forces (nobody gets their role): ${empty.map((f) => f.name).join(", ")}`);
   if (plan.unassigned.length) {
     notes.push(`Not under any force, skipped: ${plan.unassigned.map(escapeMarkdown).join(", ")}`);
   }
   if (plan.clearedChannelIds.length) {
-    notes.push(`Closed to members (no force): ${plan.clearedChannelIds.map((id) => `<#${id}>`).join(" ")}`);
+    notes.push(`No force this time, so nobody gets their role: ${plan.clearedChannelIds.map((id) => `<#${id}>`).join(" ")}`);
   }
   if (notes.length) embed.addFields({ name: "Also", value: clip(notes.join("\n")) });
   return embed;
@@ -88,7 +97,7 @@ function previewButtons(token) {
 function describeResult(plan, result) {
   const lines = [
     `Posted ${result.posted} force roster${result.posted === 1 ? "" : "s"} for **${escapeMarkdown(plan.title)}**.`,
-    `Voice channels opened to their force: ${result.updated}. Closed (no force): ${result.cleared}.`,
+    `Force roles given: ${result.given}. Taken off (not in this roster): ${result.removed}.`,
   ];
   if (result.problems.length) lines.push(`Problems:\n${result.problems.map((p) => `- ${p}`).join("\n")}`);
   return clip(lines.join("\n"), 2000);
@@ -118,7 +127,7 @@ async function handleComponent(interaction) {
     return interaction.update({ content: "Cancelled. Nothing was changed.", embeds: [], components: [] });
   }
 
-  await interaction.update({ content: "Setting voice channel permissions and posting…", components: [] });
+  await interaction.update({ content: "Giving out force roles and posting…", components: [] });
   let result;
   try {
     result = await applyRoster(interaction.guild, preview.plan, interaction.user);
@@ -141,7 +150,7 @@ async function handleComponent(interaction) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("announce-roster")
-    .setDescription("Lock the force voice channels to a raid-helper comp's forces and ping each force")
+    .setDescription("Give a raid-helper comp's members their force roles and ping each force")
     .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageChannels)
     .addStringOption((option) =>
       option.setName("comp").setDescription("The raid-helper comp ID or link").setRequired(true).setMaxLength(200)
@@ -187,7 +196,7 @@ module.exports = {
     previews.set(token, { plan, userId: interaction.user.id, expiresAt: Date.now() + PREVIEW_TTL_MS });
     const ready = plan.forces.some((force) => force.channelId && force.memberIds.length);
     return interaction.editReply({
-      content: ready ? undefined : "⚠️ No force has both a matching voice channel and members.",
+      content: ready ? undefined : "⚠️ No force has a matching voice channel, force role and members.",
       embeds: [buildPreviewEmbed(plan)],
       components: [previewButtons(token)],
       allowedMentions: { parse: [] },

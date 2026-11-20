@@ -225,24 +225,31 @@ To look a character up by hand: `node scripts/lookup-character.js <name>`. Add `
 
 ## Force rosters
 
-Force voice channels are hidden by default, so people who join the server can't sit in one and listen to the shotcalls. After the Force Leaders finish the comp on raid-helper, `/announce-roster` opens each force's voice channel to that force's members only.
+Force voice channels are hidden by default, so people who join the server can't sit in one and listen to the shotcalls. Each force voice channel has its own role (`Force 1`, `Force 2`…) that can see and join it. After the Force Leaders finish the comp on raid-helper, `/announce-roster` gives each member their force's role, so they only see their own force's channel.
 
-**Setting up the category:** in the force category, deny **View Channel** for `@everyone` and `Verified`, and allow it for the Force Leader, officer and moderator roles. Keep the voice channels synced to the category. Name each voice channel like its raid-helper divider (`Force 1`, `Force 2`…). Capitals, symbols, emoji and notes in brackets are ignored, so the divider `Force 2 (Backline)` matches the channel `🔊 Force 2`. The bot needs Manage Permissions, View Channel and Connect in the category.
+**Setting up the category:** in the force category, deny **View Channel** for `@everyone` and `Verified`, and allow it for the Force Leader, officer and moderator roles. Keep the voice channels synced to the category. Name each voice channel like its raid-helper divider (`Force 1`, `Force 2`…). Capitals, symbols, emoji and notes in brackets are ignored, so the divider `Force 2 (Backline)` matches the channel `🔊 Force 2`. The bot needs Manage Roles, plus Manage Permissions, View Channel and Connect in the category. The force roles must sit below the bot's own role in the role list, or the bot can't give them out.
+
+**Creating the force roles (once):** after the voice channels are named, run the setup script on Fly.io. It makes one role per force voice channel, named like the channel, with the same permissions as `Verified`, and lets each role see and join its own channel. It doesn't touch roles that are already set up, so it's safe to run again after adding or renaming a channel (rename the role too, so the names still match).
+
+```
+fly ssh console -C "node scripts/create-force-roles.js"           # shows what it would do
+fly ssh console -C "node scripts/create-force-roles.js --write"   # does it
+```
 
 **`/announce-roster comp:<ID or link>`**
 
 1. The bot loads the comp from raid-helper. Each divider is a force, and the groups below it, up to the next divider, are its parties.
 2. It shows you a private preview of each force: its voice channel, its Force Leader (the force member with the Force Leader role, from the top group and slot down), how many members get access, and who's skipped. Members are skipped when they aren't in the server, don't have `Verified`, or already have a place in another force. Nothing changes until you press **Post roster** (the preview expires after 15 minutes).
 3. When you press **Post roster**:
-   - Each force's voice channel gets View Channel and Connect for that force's members only. Every other member permission on the force channels is removed, and voice channels with no force are closed to members. Role permissions aren't touched.
+   - Each force member gets their force's role. Anyone who still has a force role from before but isn't in this force any more loses it. A force with no matching role is skipped, and the preview tells you.
    - For each force, it posts in the roster channel: *Join #Force 1 and whisper @Leader (**CharName**) in game to get invited to your force. If you can't make it, please ping @Leader to let them know in #general.* in large text, followed by pings for the force's members. A dashed line separates each force from the one before it.
    - A summary goes to the log channel.
 
-Running it again (say, after the comp changed) replaces the access with the new comp.
+Running it again (say, after the comp changed) moves the roles to match the new comp.
 
-**`/roster-reminder comp:<ID or link>`** is for just before the event starts. It loads the comp the same way and checks who's sitting in which voice channel. For each force, it pings only the members who aren't in their force's voice channel yet (including anyone in the wrong force's channel), with *You're not in #Force 1 yet. Join it and whisper @Leader...*. Forces where everyone's already in are skipped. It posts straight away in the roster channel, and you get a private summary of who was pinged. It doesn't change any permissions.
+**`/roster-reminder comp:<ID or link>`** is for just before the event starts. It loads the comp the same way and checks who's sitting in which voice channel. For each force, it pings only the members who aren't in their force's voice channel yet (including anyone in the wrong force's channel), with *You're not in #Force 1 yet. Join it and whisper @Leader...*. Forces where everyone's already in are skipped. It posts straight away in the roster channel, and you get a private summary of who was pinged. It doesn't change any roles.
 
-**`/reset-force-vcs`** after the event removes every member permission from the force voice channels, so they're back to roles only.
+**`/reset-force-vcs`** after the event takes the force roles off everyone, so the force voice channels are hidden again.
 
 ## Comp editing timeslots
 
@@ -277,9 +284,9 @@ The bot needs a raid-helper event that hasn't started yet, and the Force Leader 
 
 | Command | What it does | Who can use it |
 | --- | --- | --- |
-| `/announce-roster` | Open each force's voice channel to its members from a raid-helper comp and ping them in the roster channel | Manage Channels |
+| `/announce-roster` | Give a raid-helper comp's members their force roles and ping them in the roster channel | Manage Channels |
 | `/roster-reminder` | Ping the members of a raid-helper comp who aren't in their force's voice channel yet | Manage Channels |
-| `/reset-force-vcs` | Remove all member access from the force voice channels | Manage Channels |
+| `/reset-force-vcs` | Take the force roles off everyone | Manage Channels |
 | `/create-timeslots` | Post comp editing timeslots for a raid-helper event that Force Leaders can pick from | Manage Channels |
 
 ### Verification
@@ -331,6 +338,8 @@ Saved data doesn't include Discord itself. Test accounts keep their roles and ni
 - **"Verification isn't set up yet. Missing: ...":** pick those in `/settings`.
 - **A role isn't given out, or `/settings` shows a problem:** open `/settings` and read the **Problems** list. Usually the role was deleted (pick the new one) or the bot's role needs moving higher (step 4).
 - **Invalid token:** reset it in the Developer Portal and update `BOT_TOKEN`.
+- **The roster preview says "no force role for its voice channel":** run the force roles script (see [Force rosters](#force-rosters)). If you renamed a force voice channel, rename its role to match.
+- **Members got their force role but still can't see the channel:** check the channel has View Channel and Connect allowed for that role. Running the force roles script again fixes it.
 
 ## License
 

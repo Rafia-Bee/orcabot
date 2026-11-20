@@ -1,3 +1,4 @@
+// /reset-force-vcs: takes every force role off everyone after an event, so the force voice channels close again.
 const { SlashCommandBuilder, PermissionsBitField, MessageFlags } = require("discord.js");
 const { getConfig } = require("../verification/config");
 const { COLORS, buildEventEmbed, postLog } = require("../verification/embeds");
@@ -6,7 +7,7 @@ const { resetForceVcs } = require("../roster/forceVcs");
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("reset-force-vcs")
-    .setDescription("Remove all member access from the force voice channels after an event")
+    .setDescription("Take the force roles off everyone after an event")
     .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageChannels),
   async execute(interaction) {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
@@ -32,9 +33,11 @@ module.exports = {
     }
 
     const lines = [
-      result.reset === 0
-        ? "The force voice channels were already back to default."
-        : `Reset ${result.reset} voice channel${result.reset === 1 ? "" : "s"} (removed ${result.removed} member permission${result.removed === 1 ? "" : "s"}).`,
+      result.roles === 0
+        ? "No force roles found. Run the create-force-roles script first."
+        : result.removed === 0
+          ? "Nobody had a force role. Nothing to reset."
+          : `Took the force roles off ${result.removed} member${result.removed === 1 ? "" : "s"}.`,
     ];
     if (result.problems.length) lines.push(`Problems:\n${result.problems.map((p) => `- ${p}`).join("\n")}`);
     const summary = lines.join("\n").slice(0, 2000);

@@ -1,10 +1,24 @@
-const { ChannelType, OverwriteType, PermissionFlagsBits } = require("discord.js");
+// Applies force rosters in Discord: gives each force member their force role, which opens their force voice channel.
+//   exclusive             runs one roster or reset at a time
+//   forceVoiceChannels    the voice channels in the force category, in order
+//   forceRoles            the role for each force voice channel, matched by name
+//   forceRoleIdsOf        the IDs of all the force roles
+//   fetchMembers          fetches members by ID in batches
+//   planRoster            matches a comp's forces to voice channels, roles and members, without changing anything
+//   keptOverwrites        a channel's permissions minus the per-member ones
+//   hasMemberOverwrites   true when a channel still has per-member permissions (the old way of opening channels)
+//   clearMemberOverwrites removes per-member permissions from the force voice channels
+//   syncForceRoles        gives and takes force roles so they match who should have them
+//   applyRoster           sets the force roles and posts each force's pings
+//   resetForceVcs         takes every force role off everyone after an event
+//   remindRoster          pings the force members who aren't in their voice channel yet
+
+const { ChannelType, OverwriteType } = require("discord.js");
 const { getConfig } = require("../verification/config");
 const { getStore } = require("../verification/store");
-const { buildForces, channelKey, missingFromVoice, rosterMessages } = require("./comp");
+const { buildForces, channelKey, forceRoleChanges, missingFromVoice, rosterMessages } = require("./comp");
 
 const MEMBER_FETCH_BATCH = 100;
-const FORCE_MEMBER_ALLOW = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect];
 
 let busy = false;
 
@@ -33,6 +47,18 @@ async function forceVoiceChannels(guild) {
   ];
 }
 
+async function forceRoles(guild, voiceChannels) {
+  const keys = new Set(voiceChannels.map((channel) => channelKey(channel.name)));
+  const roles = await guild.roles.fetch();
+  const rolesByKey = new Map();
+  for (const role of roles.values()) {
+    const key = channelKey(role.name);
+    if (role.id === guild.id || role.managed || !keys.has(key) || rolesByKey.has(key)) continue;
+    rolesByKey.set(key, role);
+  }
+  return rolesByKey;
+}
+
 async function fetchMembers(guild, ids) {
   const members = new Map();
   for (let i = 0; i < ids.length; i += MEMBER_FETCH_BATCH) {
@@ -50,6 +76,7 @@ async function planRoster(guild, comp) {
   const cfg = getConfig();
   const { forces, unassigned } = buildForces(comp);
   const voiceChannels = await forceVoiceChannels(guild);
+  const rolesByKey = await forceRoles(guild, voiceChannels);
   const channelsByKey = new Map();
   for (const channel of voiceChannels) {
     const key = channelKey(channel.name);
@@ -65,6 +92,14 @@ async function planRoster(guild, comp) {
     const channel = channelsByKey.get(channelKey(force.name)) ?? null;
     const channelTaken = channel && usedChannelIds.has(channel.id);
     if (channel && !channelTaken) usedChannelIds.add(channel.id);
+    const role = channel && !channelTaken ? rolesByKey.get(channelKey(channel.name)) ?? null : null;
+    const channelProblem = channelTaken
+      ? "its voice channel is already used by another force"
+      : !channel
+        ? "no voice channel with this name"
+        : !role
+          ? "no force role for its voice channel"
+          : null;
 
     const memberIds = [];
     const skipped = [];
@@ -88,8 +123,9 @@ async function planRoster(guild, comp) {
     return {
       name: force.name,
       groups: force.groups,
-      channelId: channel && !channelTaken ? channel.id : null,
-      channelProblem: channelTaken ? "its voice channel is already used by another force" : channel ? null : "no voice channel with this name",
+      channelId: role ? channel.id : null,
+      roleId: role?.id ?? null,
+      channelProblem,
       leaderId,
       leaderCharName: leaderId ? getStore().getVerification(leaderId)?.char_name ?? null : null,
       otherLeaderIds: leaderIds.slice(1),
@@ -126,41 +162,75 @@ function hasMemberOverwrites(channel) {
   );
 }
 
-async function setForceMembers(channel, memberIds, reason) {
-  const overwrites = [
-    ...keptOverwrites(channel),
-    ...memberIds.map((id) => ({ id, type: OverwriteType.Member, allow: FORCE_MEMBER_ALLOW })),
-  ];
-  return channel.permissionOverwrites.set(overwrites, reason);
+async function clearMemberOverwrites(voiceChannels, reason, problems) {
+  for (const channel of voiceChannels) {
+    if (!hasMemberOverwrites(channel)) continue;
+    try {
+      await channel.permissionOverwrites.set(keptOverwrites(channel), reason);
+    } catch (error) {
+      problems.push(`${channel.name}: couldn't remove the old member permissions (${error.message})`);
+    }
+  }
+}
+
+async function forceRoleIdsOf(guild, voiceChannels) {
+  return new Set([...(await forceRoles(guild, voiceChannels)).values()].map((role) => role.id));
+}
+
+async function syncForceRoles(guild, wantedRoleOf, forceRoleIds, reason) {
+  const result = { given: 0, removed: 0, problems: [] };
+  const members = await guild.members.fetch();
+  const currentRolesOf = new Map();
+  for (const member of members.values()) {
+    const roleIds = [...member.roles.cache.keys()].filter((id) => id !== guild.id);
+    if (wantedRoleOf.has(member.id) || roleIds.some((id) => forceRoleIds.has(id))) {
+      currentRolesOf.set(member.id, roleIds);
+    }
+  }
+
+  for (const change of forceRoleChanges(wantedRoleOf, currentRolesOf, forceRoleIds)) {
+    const member = members.get(change.memberId);
+    if (!member) {
+      result.problems.push(`<@${change.memberId}>: left the server`);
+      continue;
+    }
+    const roleIds = currentRolesOf.get(change.memberId).filter((id) => !change.remove.includes(id));
+    if (change.add) roleIds.push(change.add);
+    try {
+      await member.roles.set(roleIds, reason);
+      if (change.add) result.given += 1;
+      else result.removed += 1;
+    } catch (error) {
+      result.problems.push(`<@${change.memberId}>: couldn't change their force role (${error.message})`);
+    }
+  }
+  return result;
 }
 
 async function applyRoster(guild, plan, actor) {
   return exclusive(async () => {
     const cfg = getConfig();
     const reason = `Roster "${plan.title}" posted by ${actor.tag}`;
-    const result = { updated: 0, cleared: 0, posted: 0, problems: [] };
-    const voiceChannels = new Map((await forceVoiceChannels(guild)).map((channel) => [channel.id, channel]));
+    const result = { given: 0, removed: 0, posted: 0, problems: [] };
+    const voiceChannels = await forceVoiceChannels(guild);
+    const forceRoleIds = await forceRoleIdsOf(guild, voiceChannels);
 
-    const targets = [
-      ...plan.forces.filter((force) => force.channelId).map((force) => ({ channelId: force.channelId, force })),
-      ...plan.clearedChannelIds.map((channelId) => ({ channelId, force: null })),
-    ];
-    for (const { channelId, force } of targets) {
-      const channel = voiceChannels.get(channelId);
-      if (!channel) {
-        result.problems.push(`${force?.name ?? channelId}: the voice channel is gone`);
+    const wantedRoleOf = new Map();
+    for (const force of plan.forces) {
+      if (!force.roleId) continue;
+      if (!forceRoleIds.has(force.roleId)) {
+        result.problems.push(`${force.name}: its force role is gone`);
+        force.roleId = null;
         continue;
       }
-      if (!force && !hasMemberOverwrites(channel)) continue;
-      try {
-        await setForceMembers(channel, force?.memberIds ?? [], reason);
-        if (force) result.updated += 1;
-        else result.cleared += 1;
-      } catch (error) {
-        result.problems.push(`${channel.name}: couldn't change permissions (${error.message})`);
-        if (force) force.failed = true;
-      }
+      for (const id of force.memberIds) wantedRoleOf.set(id, force.roleId);
     }
+
+    await clearMemberOverwrites(voiceChannels, reason, result.problems);
+    const sync = await syncForceRoles(guild, wantedRoleOf, forceRoleIds, reason);
+    result.given = sync.given;
+    result.removed = sync.removed;
+    result.problems.push(...sync.problems);
 
     let rosterChannel = null;
     try {
@@ -170,7 +240,7 @@ async function applyRoster(guild, plan, actor) {
     }
 
     for (const force of plan.forces) {
-      if (!rosterChannel || !force.channelId || force.failed || force.memberIds.length === 0) continue;
+      if (!rosterChannel || !force.roleId || force.memberIds.length === 0) continue;
       const pinged = force.memberIds.filter((id) => id !== force.leaderId);
       const messages = rosterMessages({
         voiceChannelId: force.channelId,
@@ -196,22 +266,12 @@ async function applyRoster(guild, plan, actor) {
 async function resetForceVcs(guild, actor) {
   return exclusive(async () => {
     const reason = `Force voice channels reset by ${actor.tag}`;
-    const result = { reset: 0, removed: 0, problems: [] };
-    for (const channel of await forceVoiceChannels(guild)) {
-      if (!hasMemberOverwrites(channel)) continue;
-      const botId = guild.members.me.id;
-      const removed = channel.permissionOverwrites.cache.filter(
-        (overwrite) => overwrite.type === OverwriteType.Member && overwrite.id !== botId
-      ).size;
-      try {
-        await channel.permissionOverwrites.set(keptOverwrites(channel), reason);
-        result.reset += 1;
-        result.removed += removed;
-      } catch (error) {
-        result.problems.push(`${channel.name}: ${error.message}`);
-      }
-    }
-    return result;
+    const voiceChannels = await forceVoiceChannels(guild);
+    const forceRoleIds = await forceRoleIdsOf(guild, voiceChannels);
+    const problems = [];
+    await clearMemberOverwrites(voiceChannels, reason, problems);
+    const sync = await syncForceRoles(guild, new Map(), forceRoleIds, reason);
+    return { removed: sync.removed, roles: forceRoleIds.size, problems: [...problems, ...sync.problems] };
   });
 }
 

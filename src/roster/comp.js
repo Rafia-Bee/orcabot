@@ -1,3 +1,14 @@
+// Raid-helper comps and the force rosters built from them. Pure logic, no Discord calls except fetching the comp.
+//   parseRaidHelperId  pulls a comp or event ID out of an ID or link
+//   fetchComp          loads a comp from raid-helper
+//   fetchEvent         loads an event from raid-helper
+//   buildForces        splits a comp into forces (one per divider) and their slots
+//   channelKey         a name reduced to letters and numbers, used to match forces, voice channels and roles
+//   forceRoleName      the role name for a force voice channel, without the emoji and symbols around it
+//   forceRoleChanges   which force role each member gains or loses so roles match the roster
+//   missingFromVoice   the members not sitting in their force's voice channel
+//   rosterMessages     the roster ping messages, split under Discord's length limit
+
 const { escapeMarkdown } = require("discord.js");
 
 const RAID_HELPER_API_BASE = "https://raid-helper.xyz/api/v4";
@@ -78,6 +89,22 @@ function channelKey(name) {
     .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
+function forceRoleName(channelName) {
+  return String(channelName ?? "").replace(/^[^\p{L}\p{N}(\[]+|[^\p{L}\p{N})\]]+$/gu, "");
+}
+
+function forceRoleChanges(wantedRoleOf, currentRolesOf, forceRoleIds) {
+  const changes = [];
+  for (const memberId of new Set([...wantedRoleOf.keys(), ...currentRolesOf.keys()])) {
+    const wanted = wantedRoleOf.get(memberId) ?? null;
+    const current = (currentRolesOf.get(memberId) ?? []).filter((id) => forceRoleIds.has(id));
+    const add = wanted && !current.includes(wanted) ? wanted : null;
+    const remove = current.filter((id) => id !== wanted);
+    if (add || remove.length) changes.push({ memberId, add, remove });
+  }
+  return changes;
+}
+
 function missingFromVoice(memberIds, voiceChannelId, voiceChannelOf) {
   return memberIds.filter((id) => voiceChannelOf.get(id) !== voiceChannelId);
 }
@@ -121,6 +148,8 @@ module.exports = {
   fetchEvent,
   buildForces,
   channelKey,
+  forceRoleName,
+  forceRoleChanges,
   missingFromVoice,
   rosterMessages,
 };

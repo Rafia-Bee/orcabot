@@ -182,7 +182,7 @@ That's it. Pushes to `main` now deploy automatically (you can watch them in the 
    - **Typo or unknown name:** they're asked to try again.
    - **Anything unusual** (the character's already claimed by someone else, or every lookup site is down): it goes to the review channel with **Approve** and **Deny** buttons.
 3. Along with `Verified`, members get their legion's role (or Guest if their legion isn't in the alliance) and their class role, if Legion roles, Guest role and Class roles are set in `/settings`. If someone changes legion or class, run `/recheck-members` (for them or everyone) to update the roles.
-4. Each character can only belong to one Discord account. The bot remembers each character's aion2index ID, so this still holds after a rename, and members who rename their character can verify again with the new name.
+4. Each character can only belong to one Discord account. The bot remembers each character's ID, so this still holds after a rename, and members who rename their character can verify again with the new name.
 5. Archived tickets are deleted after 7 days without messages.
 6. If a flood of Verify requests comes in at once (a raid), the bot pauses verification for a few minutes and warns the mods. Members are asked to try again shortly.
 
@@ -192,11 +192,13 @@ Members never see how the checks work. All the details go to the mods-only chann
 
 ## Character lookup sites
 
-The bot looks characters up on [aion2index.com](https://aion2index.com) (through its API) and [shugo.gg](https://shugo.gg). `LOOKUP_SOURCES` in `.env` picks the sites and their order:
+The bot can look characters up in three places:
 
-- `aion2index,shugo`: aion2index first, shugo.gg only when aion2index fails.
-- `shugo,aion2index`: the other way round.
-- `aion2index` or `shugo`: only that site.
+- `plaync`: the official AION 2 site, [aion2.plaync.com](https://aion2.plaync.com). The bot reads the same data NCSOFT's own character page shows. No key needed.
+- `aion2index`: [aion2index.com](https://aion2index.com), through its API.
+- `shugo`: [shugo.gg](https://shugo.gg).
+
+`LOOKUP_SOURCES` in `.env` picks the sites and their order. The first one is used, the next only when it fails. The recommended setting is `plaync,aion2index,shugo`: the official site first, the other two as backups. You can also list fewer, like `plaync,shugo`.
 
 When a site fails (down, too slow, or out of date because the game isn't answering), the bot uses the next one for `LOOKUP_FAILOVER_MINUTES` minutes. It posts a note in the log channel when that happens and another when the site works again. Log entries looked up on the backup site show **Source: … (backup)**.
 
@@ -204,9 +206,13 @@ aion2index needs an API key: request access on its [API page](https://aion2index
 
 How the sites differ:
 
-- aion2index reads the character from the game on every lookup. shugo.gg can be up to half an hour behind.
-- aion2index gives each character an ID that survives renames. The bot saves it with the member's claim.
-- Only shugo.gg reports gear. With aion2index, review tickets pick the item to unequip from the whole `TICKET_GEAR_SLOTS` list.
+- The official site and aion2index always show the character as it is right now. shugo.gg can be behind, by up to a day in testing.
+- The official site and aion2index give each character an ID that survives renames. It's the same ID on both, and the bot saves it with the member's claim.
+- The official site and shugo.gg report gear. With aion2index, review tickets pick the item to unequip from the whole `TICKET_GEAR_SLOTS` list.
+- The official site isn't a documented service. NCSOFT can change or block it without warning, which is why the other two stay as backups.
+- When a member renames their character, only shugo.gg still finds them under the old name. That's how `/recheck-members` notices renames by itself, so keep shugo in `LOOKUP_SOURCES`.
+
+The official site's settings (`PLAYNC_REGION`, `PLAYNC_SERVER_ID` and so on) all have defaults for Europe, Israphel. See `.env.example`.
 
 ### Saving character IDs for existing members
 
@@ -221,7 +227,7 @@ On Fly.io: `fly ssh console -C "node scripts/backfill-character-ids.js --write"`
 
 It lists characters it couldn't find (renamed or deleted; `/recheck-members` sends those to review) and any it skipped because the class, faction or server no longer matches. `/recheck-members` also saves the ID for everyone it checks.
 
-To look a character up by hand: `node scripts/lookup-character.js <name>`. Add `--compare` to see where the two sites disagree, or `--source aion2index` / `--source shugo` to ask one site.
+To look a character up by hand: `node scripts/lookup-character.js <name>`. Add `--compare` to see where the sites disagree, or `--source plaync` / `--source aion2index` / `--source shugo` to ask one site.
 
 ## Force rosters
 

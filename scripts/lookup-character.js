@@ -13,10 +13,10 @@ const names = args.filter(
 
 if (names.length === 0 || (sourceName && !SOURCES[sourceName])) {
   console.error(
-    "Usage: node scripts/lookup-character.js [--source aion2index|shugo] [--compare] <name> [name...]\n" +
+    `Usage: node scripts/lookup-character.js [--source ${Object.keys(SOURCES).join("|")}] [--compare] <name> [name...]\n` +
       "  (no flag)  look up like the bot does, following LOOKUP_SOURCES\n" +
       "  --source   ask only that site\n" +
-      "  --compare  ask both sites and show fields that differ"
+      "  --compare  ask every site and show fields that differ"
   );
   process.exit(1);
 }
@@ -32,18 +32,25 @@ function printResult(result) {
 }
 
 async function compareSources(name) {
-  const [a, b] = await Promise.all([SOURCES.aion2index.lookup(name), SOURCES.shugo.lookup(name)]);
-  if (a.status !== "found" || b.status !== "found") {
-    console.log("aion2index:", a.status, a.reason ?? "", "| shugo:", b.status, b.reason ?? "");
-    return;
-  }
-  const diffs = COMPARED_FIELDS.filter((field) => a.character[field] !== b.character[field]);
+  const sources = Object.keys(SOURCES);
+  const results = await Promise.all(sources.map((source) => SOURCES[source].lookup(name)));
+  const found = [];
+  sources.forEach((source, index) => {
+    const result = results[index];
+    if (result.status === "found") found.push({ source, character: result.character });
+    else console.log(`${source}: ${result.status} ${result.reason ?? ""}`);
+  });
+  if (found.length < 2) return;
+
+  const diffs = COMPARED_FIELDS.filter((field) =>
+    found.some(({ character }) => character[field] !== found[0].character[field])
+  );
   if (diffs.length === 0) {
-    console.log(`same on both sites (characterId ${a.character.characterId})`);
+    console.log(`same on ${found.map(({ source }) => source).join(", ")}`);
     return;
   }
   for (const field of diffs) {
-    console.log(`${field}: aion2index ${a.character[field]} | shugo ${b.character[field]}`);
+    console.log(`${field}: ${found.map(({ source, character }) => `${source} ${character[field]}`).join(" | ")}`);
   }
 }
 

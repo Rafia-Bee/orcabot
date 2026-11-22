@@ -280,6 +280,7 @@ async function handleComponent(interaction) {
 const COOLDOWN_PRUNE_INTERVAL_MS = 60 * 60 * 1000;
 
 const SOURCE_SETTINGS = {
+  plaync: { required: ["characterId", "equipment"], settings: "PLAYNC_REGION and PLAYNC_SERVER_ID" },
   shugo: { required: ["equipment"], settings: "SHUGO_BASE_URL and SHUGO_REGION_PATH" },
   aion2index: { required: ["characterId"], settings: "AION2INDEX_BASE_URL and AION2INDEX_REGION_PATH" },
 };

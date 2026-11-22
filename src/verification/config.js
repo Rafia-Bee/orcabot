@@ -82,7 +82,7 @@ function parseTime(raw) {
   return `${match[1].padStart(2, "0")}:${match[2]}`;
 }
 
-const LOOKUP_SOURCE_NAMES = ["aion2index", "shugo"];
+const LOOKUP_SOURCE_NAMES = ["plaync", "aion2index", "shugo"];
 
 function parseLookupSources(raw) {
   const sources = (raw ?? "shugo")
@@ -125,6 +125,15 @@ function loadConfig() {
     baseUrl: env.string("SHUGO_BASE_URL")?.replace(/\/+$/, ""),
     regionPath: env.string("SHUGO_REGION_PATH")?.replace(/^\/+|\/+$/g, ""),
     minRequestGapMs: env.int("SHUGO_MIN_REQUEST_GAP_MS"),
+  };
+  const plaync = {
+    searchUrl: (
+      process.env.PLAYNC_SEARCH_URL?.trim() || "https://api-search.plaync.com/aion2global/search/v2/character"
+    ).replace(/\/+$/, ""),
+    baseUrl: (process.env.PLAYNC_BASE_URL?.trim() || "https://aion2.plaync.com").replace(/\/+$/, ""),
+    region: process.env.PLAYNC_REGION?.trim() || "eu",
+    serverId: intFromEnv("PLAYNC_SERVER_ID", 2301),
+    minRequestGapMs: intFromEnv("PLAYNC_MIN_REQUEST_GAP_MS", 2000),
   };
   const aion2index = {
     apiKey: process.env.AION2INDEX_API_KEY?.trim() || null,
@@ -191,6 +200,7 @@ function loadConfig() {
     },
     ...requirements,
     lookup,
+    plaync,
     shugo,
     aion2index,
     dailyRecheckTime,

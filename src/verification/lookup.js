@@ -2,6 +2,7 @@ const EventEmitter = require("events");
 const { getConfig } = require("./config");
 
 const SOURCES = {
+  plaync: require("./sources/plaync"),
   aion2index: require("./sources/aion2index"),
   shugo: require("./sources/shugo"),
 };
